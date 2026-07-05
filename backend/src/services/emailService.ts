@@ -1,23 +1,61 @@
 import sgMail from '@sendgrid/mail';
+import nodemailer, { type Transporter } from 'nodemailer';
 import type { OutreachRecord, EmailTemplate, OrganizationSettings } from '../types/outreach.js';
 
-// Initialize SendGrid
+// ---- Provider configuration ----------------------------------------------
+// Any SMTP provider (Mailtrap, Gmail, Brevo, Resend, SendGrid SMTP, …) can be
+// used by setting SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS. SMTP takes
+// precedence when configured; otherwise we fall back to the SendGrid API.
+const SMTP_HOST = process.env.SMTP_HOST;
+const SMTP_PORT = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+// Default: implicit TLS on 465, STARTTLS otherwise. Override with SMTP_SECURE.
+const SMTP_SECURE = process.env.SMTP_SECURE
+  ? process.env.SMTP_SECURE === 'true'
+  : SMTP_PORT === 465;
+
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-if (SENDGRID_API_KEY) {
-  sgMail.setApiKey(SENDGRID_API_KEY);
+// A real SendGrid key starts with "SG." — this ignores the .env placeholder.
+const SENDGRID_READY = !!SENDGRID_API_KEY && SENDGRID_API_KEY.startsWith('SG.');
+const SMTP_READY = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
+
+if (SENDGRID_READY) {
+  sgMail.setApiKey(SENDGRID_API_KEY!);
 }
 
 export class EmailService {
   private fromEmail: string;
   private fromName: string;
+  private smtp: Transporter | null = null;
 
   constructor() {
     this.fromEmail = process.env.FROM_EMAIL || 'noreply@example.com';
     this.fromName = process.env.FROM_NAME || 'Clinical Trials Research';
   }
 
+  /** Which provider will actually send: 'smtp' | 'sendgrid' | 'none'. */
+  provider(): 'smtp' | 'sendgrid' | 'none' {
+    if (SMTP_READY) return 'smtp';
+    if (SENDGRID_READY) return 'sendgrid';
+    return 'none';
+  }
+
   isConfigured(): boolean {
-    return Boolean(SENDGRID_API_KEY);
+    return this.provider() !== 'none';
+  }
+
+  /** Lazily build (and reuse) the SMTP transport. */
+  private getSmtp(): Transporter {
+    if (!this.smtp) {
+      this.smtp = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_SECURE,
+        auth: { user: SMTP_USER, pass: SMTP_PASS },
+      });
+    }
+    return this.smtp;
   }
 
   parseTemplateVariables(template: string): string[] {
@@ -53,13 +91,33 @@ export class EmailService {
       trackClicks?: boolean;
     }
   ): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    if (!this.isConfigured()) {
+    const provider = this.provider();
+    if (provider === 'none') {
       return {
         success: false,
-        error: 'SendGrid API key not configured',
+        error: 'No email provider configured (set SMTP_* or SENDGRID_API_KEY)',
       };
     }
 
+    // SMTP path (Mailtrap, Gmail, Brevo, etc.).
+    if (provider === 'smtp') {
+      try {
+        const info = await this.getSmtp().sendMail({
+          from: { address: this.fromEmail, name: this.fromName },
+          to,
+          subject,
+          text: body,
+          html: body.replace(/\n/g, '<br>'),
+          replyTo: options?.replyTo,
+        });
+        return { success: true, messageId: info.messageId };
+      } catch (error: any) {
+        console.error('SMTP error:', error);
+        return { success: false, error: error.message || 'SMTP send failed' };
+      }
+    }
+
+    // SendGrid API path.
     try {
       const msg = {
         to,

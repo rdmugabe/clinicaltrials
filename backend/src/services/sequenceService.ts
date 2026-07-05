@@ -263,12 +263,24 @@ export const sequenceService = {
   // ---------- Mailbox ----------
   getMailbox(): Mailbox {
     const r = db.prepare('SELECT * FROM mailbox WHERE id = 1').get() as Record<string, unknown>;
+    const serverProvider = emailService.provider();
     return {
       connected: !!r.connected,
       fromEmail: (r.from_email as string) || undefined,
       fromName: (r.from_name as string) || undefined,
       provider: (r.provider as string) || undefined,
+      serverConfigured: serverProvider !== 'none',
+      serverProvider,
     };
+  },
+
+  /** Send a one-off test email through the configured provider. */
+  async sendTestEmail(to: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    return emailService.sendEmail(
+      to,
+      'TrialHub test email',
+      'This is a test email from TrialHub confirming your email provider is connected.\n\nIf you can see this, outbound email is working.'
+    );
   },
 
   connectMailbox(input: { fromEmail: string; fromName?: string; provider?: string }): Mailbox {

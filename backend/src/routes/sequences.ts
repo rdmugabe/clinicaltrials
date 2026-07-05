@@ -123,4 +123,15 @@ router.post('/mailbox/disconnect', (_req: Request, res: Response) => {
   res.json(sequenceService.disconnectMailbox());
 });
 
+// Send a test email through the configured provider (SMTP/SendGrid).
+router.post('/mailbox/test', async (req: Request, res: Response) => {
+  const { to } = req.body as { to?: string };
+  if (!to?.trim()) {
+    res.status(400).json({ error: 'to (recipient email) is required' });
+    return;
+  }
+  const result = await sequenceService.sendTestEmail(to.trim());
+  res.status(result.success ? 200 : 502).json(result);
+});
+
 export default router;
