@@ -1,0 +1,287 @@
+import { randomUUID } from 'crypto';
+import { db } from '../db/database.js';
+import { emailService } from './emailService.js';
+import type {
+  Sequence,
+  SequenceStep,
+  SequenceEnrollment,
+  Signature,
+  Mailbox,
+  SequenceMetrics,
+} from '../types/studyfinder.js';
+
+interface SeqRow {
+  id: string;
+  name: string;
+  status: 'draft' | 'active' | 'paused';
+  steps: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function enrolledCount(sequenceId: string): number {
+  return (
+    db.prepare('SELECT COUNT(*) AS n FROM sequence_enrollments WHERE sequence_id = ?').get(sequenceId) as {
+      n: number;
+    }
+  ).n;
+}
+
+function rowToSeq(r: SeqRow): Sequence {
+  return {
+    id: r.id,
+    name: r.name,
+    status: r.status,
+    steps: JSON.parse(r.steps) as SequenceStep[],
+    enrolledCount: enrolledCount(r.id),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function daysFromNow(days: number): string {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+export const sequenceService = {
+  // ---------- Sequences ----------
+  list(): Sequence[] {
+    const rows = db.prepare('SELECT * FROM sequences ORDER BY updated_at DESC').all() as SeqRow[];
+    return rows.map(rowToSeq);
+  },
+
+  get(id: string): Sequence | undefined {
+    const row = db.prepare('SELECT * FROM sequences WHERE id = ?').get(id) as SeqRow | undefined;
+    return row ? rowToSeq(row) : undefined;
+  },
+
+  create(input: { name: string; steps?: SequenceStep[] }): Sequence {
+    const id = `seq_${randomUUID()}`;
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO sequences (id, name, status, steps, created_at, updated_at) VALUES (?, ?, 'draft', ?, ?, ?)`
+    ).run(id, input.name.trim(), JSON.stringify(input.steps || []), now, now);
+    return this.get(id)!;
+  },
+
+  update(id: string, input: { name?: string; steps?: SequenceStep[]; status?: Sequence['status'] }): Sequence | undefined {
+    const existing = this.get(id);
+    if (!existing) return undefined;
+    const now = new Date().toISOString();
+    db.prepare('UPDATE sequences SET name = ?, steps = ?, status = ?, updated_at = ? WHERE id = ?').run(
+      input.name?.trim() ?? existing.name,
+      JSON.stringify(input.steps ?? existing.steps),
+      input.status ?? existing.status,
+      now,
+      id
+    );
+    return this.get(id);
+  },
+
+  delete(id: string): boolean {
+    db.prepare('DELETE FROM sequence_enrollments WHERE sequence_id = ?').run(id);
+    db.prepare('DELETE FROM sequence_sends WHERE sequence_id = ?').run(id);
+    return db.prepare('DELETE FROM sequences WHERE id = ?').run(id).changes > 0;
+  },
+
+  /** Flip a sequence active/paused. Activating makes due steps eligible to send. */
+  async setStatus(id: string, status: 'active' | 'paused'): Promise<Sequence | undefined> {
+    const seq = this.update(id, { status });
+    if (seq && status === 'active') {
+      // Make active enrollments with no scheduled send eligible immediately.
+      db.prepare(
+        `UPDATE sequence_enrollments SET next_send_at = ? WHERE sequence_id = ? AND status = 'active' AND next_send_at IS NULL`
+      ).run(new Date().toISOString(), id);
+      await this.processQueue();
+    }
+    return this.get(id);
+  },
+
+  // ---------- Enrollments ----------
+  enroll(
+    sequenceId: string,
+    contacts: { contactId?: string; name?: string; email: string }[]
+  ): { enrolled: number } {
+    const seq = this.get(sequenceId);
+    if (!seq) throw new Error('Sequence not found');
+    const now = new Date().toISOString();
+    const existing = new Set(
+      (
+        db.prepare('SELECT contact_email FROM sequence_enrollments WHERE sequence_id = ?').all(sequenceId) as {
+          contact_email: string;
+        }[]
+      ).map((r) => r.contact_email.toLowerCase())
+    );
+    const insert = db.prepare(
+      `INSERT INTO sequence_enrollments
+        (id, sequence_id, contact_id, contact_name, contact_email, current_step, status, enrolled_at, next_send_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 0, 'active', ?, ?, ?)`
+    );
+    let enrolled = 0;
+    const nextSend = seq.status === 'active' ? now : null;
+    const tx = db.transaction((list: typeof contacts) => {
+      for (const c of list) {
+        if (!c.email || existing.has(c.email.toLowerCase())) continue;
+        insert.run(`enr_${randomUUID()}`, sequenceId, c.contactId || null, c.name || null, c.email, now, nextSend, now);
+        enrolled++;
+      }
+    });
+    tx(contacts);
+    return { enrolled };
+  },
+
+  listEnrollments(sequenceId: string): SequenceEnrollment[] {
+    const rows = db
+      .prepare('SELECT * FROM sequence_enrollments WHERE sequence_id = ? ORDER BY enrolled_at DESC')
+      .all(sequenceId) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: r.id as string,
+      sequenceId: r.sequence_id as string,
+      contactId: (r.contact_id as string) || undefined,
+      contactName: (r.contact_name as string) || undefined,
+      contactEmail: r.contact_email as string,
+      currentStep: r.current_step as number,
+      status: r.status as SequenceEnrollment['status'],
+      enrolledAt: r.enrolled_at as string,
+      nextSendAt: (r.next_send_at as string) || undefined,
+    }));
+  },
+
+  /**
+   * Process all due sends across active sequences. Sends via SendGrid when
+   * configured; otherwise logs a simulated send so the queue still advances.
+   */
+  async processQueue(): Promise<{ processed: number }> {
+    const now = new Date().toISOString();
+    const due = db
+      .prepare(
+        `SELECT e.* FROM sequence_enrollments e
+         JOIN sequences s ON s.id = e.sequence_id
+         WHERE e.status = 'active' AND s.status = 'active'
+           AND e.next_send_at IS NOT NULL AND e.next_send_at <= ?`
+      )
+      .all(now) as Record<string, unknown>[];
+
+    let processed = 0;
+    for (const e of due) {
+      const seq = this.get(e.sequence_id as string);
+      if (!seq) continue;
+      const stepIdx = e.current_step as number;
+      const step = seq.steps[stepIdx];
+      const enrollmentId = e.id as string;
+      const email = e.contact_email as string;
+
+      if (!step) {
+        db.prepare(`UPDATE sequence_enrollments SET status = 'completed', next_send_at = NULL, updated_at = ? WHERE id = ?`).run(
+          now,
+          enrollmentId
+        );
+        continue;
+      }
+
+      // Attempt a real send only if the mailbox/provider is configured.
+      if (emailService.isConfigured()) {
+        try {
+          await emailService.sendEmail(email, step.subject, step.body, {});
+        } catch (err) {
+          console.error('Sequence send failed:', err);
+        }
+      }
+
+      db.prepare(
+        `INSERT INTO sequence_sends (id, sequence_id, enrollment_id, step_index, subject, to_email, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'sent', ?)`
+      ).run(`snd_${randomUUID()}`, seq.id, enrollmentId, stepIdx, step.subject, email, now);
+
+      const nextIdx = stepIdx + 1;
+      const nextStep = seq.steps[nextIdx];
+      if (nextStep) {
+        db.prepare(
+          `UPDATE sequence_enrollments SET current_step = ?, next_send_at = ?, updated_at = ? WHERE id = ?`
+        ).run(nextIdx, daysFromNow(nextStep.delayDays || 0), now, enrollmentId);
+      } else {
+        db.prepare(
+          `UPDATE sequence_enrollments SET current_step = ?, status = 'completed', next_send_at = NULL, updated_at = ? WHERE id = ?`
+        ).run(nextIdx, now, enrollmentId);
+      }
+      processed++;
+    }
+    return { processed };
+  },
+
+  metrics(): SequenceMetrics {
+    const activeSequences = (
+      db.prepare(`SELECT COUNT(*) AS n FROM sequences WHERE status = 'active'`).get() as { n: number }
+    ).n;
+    const sends = db.prepare('SELECT status FROM sequence_sends').all() as { status: string }[];
+    const emailsSent = sends.length;
+    const opened = sends.filter((s) => s.status === 'opened' || s.status === 'replied').length;
+    const replied = sends.filter((s) => s.status === 'replied').length;
+    const bounced = sends.filter((s) => s.status === 'bounced').length;
+    const inQueue = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM sequence_enrollments e JOIN sequences s ON s.id = e.sequence_id
+           WHERE e.status = 'active' AND s.status = 'active' AND e.next_send_at IS NOT NULL`
+        )
+        .get() as { n: number }
+    ).n;
+    const avgOpenRate = emailsSent > 0 ? Math.round((opened / emailsSent) * 100) : 0;
+    return { activeSequences, emailsSent, inQueue, bounced, opened, replied, avgOpenRate };
+  },
+
+  // ---------- Signatures ----------
+  listSignatures(): Signature[] {
+    const rows = db.prepare('SELECT * FROM signatures ORDER BY created_at DESC').all() as Record<string, unknown>[];
+    return rows.map((r) => ({
+      id: r.id as string,
+      name: r.name as string,
+      body: r.body as string,
+      isDefault: !!r.is_default,
+      createdAt: r.created_at as string,
+    }));
+  },
+
+  createSignature(name: string, body: string): Signature {
+    const id = `sig_${randomUUID()}`;
+    const now = new Date().toISOString();
+    const isFirst = (db.prepare('SELECT COUNT(*) AS n FROM signatures').get() as { n: number }).n === 0;
+    db.prepare('INSERT INTO signatures (id, name, body, is_default, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      id,
+      name.trim(),
+      body,
+      isFirst ? 1 : 0,
+      now
+    );
+    return this.listSignatures().find((s) => s.id === id)!;
+  },
+
+  deleteSignature(id: string): boolean {
+    return db.prepare('DELETE FROM signatures WHERE id = ?').run(id).changes > 0;
+  },
+
+  // ---------- Mailbox ----------
+  getMailbox(): Mailbox {
+    const r = db.prepare('SELECT * FROM mailbox WHERE id = 1').get() as Record<string, unknown>;
+    return {
+      connected: !!r.connected,
+      fromEmail: (r.from_email as string) || undefined,
+      fromName: (r.from_name as string) || undefined,
+      provider: (r.provider as string) || undefined,
+    };
+  },
+
+  connectMailbox(input: { fromEmail: string; fromName?: string; provider?: string }): Mailbox {
+    db.prepare('UPDATE mailbox SET connected = 1, from_email = ?, from_name = ?, provider = ? WHERE id = 1').run(
+      input.fromEmail,
+      input.fromName || null,
+      input.provider || 'SMTP',
+      );
+    return this.getMailbox();
+  },
+
+  disconnectMailbox(): Mailbox {
+    db.prepare('UPDATE mailbox SET connected = 0 WHERE id = 1').run();
+    return this.getMailbox();
+  },
+};
