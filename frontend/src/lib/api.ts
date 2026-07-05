@@ -721,6 +721,10 @@ export async function disconnectMailbox(): Promise<Mailbox> {
   return fetchApi('/sequences/mailbox/disconnect', { method: 'POST' });
 }
 
+export async function sendTestEmail(to: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  return fetchApi('/sequences/mailbox/test', { method: 'POST', body: JSON.stringify({ to }) });
+}
+
 // ============ AI (Claude) ============
 
 export async function getAiStatus(): Promise<{ configured: boolean; model: string }> {

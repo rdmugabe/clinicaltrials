@@ -12,6 +12,7 @@ import {
   getMailbox,
   connectMailbox,
   disconnectMailbox,
+  sendTestEmail,
 } from '@/lib/api';
 import type { Sequence, SequenceMetrics, Signature, Mailbox } from '@/types';
 import SequenceEditor from '@/components/sequences/SequenceEditor';
@@ -252,12 +253,33 @@ function SignaturesTab({ signatures, onChange }: { signatures: Signature[]; onCh
 function MailboxTab({ mailbox, onChange }: { mailbox: Mailbox; onChange: (m: Mailbox) => void }) {
   const [fromEmail, setFromEmail] = useState(mailbox.fromEmail || '');
   const [fromName, setFromName] = useState(mailbox.fromName || '');
+  const [testTo, setTestTo] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const connect = async () => {
     if (!fromEmail.trim()) return;
     onChange(await connectMailbox({ fromEmail: fromEmail.trim(), fromName: fromName.trim() || undefined }));
   };
   const disconnect = async () => onChange(await disconnectMailbox());
+
+  const runTest = async () => {
+    if (!testTo.trim() || testing) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await sendTestEmail(testTo.trim());
+      setTestResult(
+        r.success
+          ? { ok: true, msg: 'Test email sent. Check your Mailtrap inbox (sandbox captures it — it is not delivered to the real address).' }
+          : { ok: false, msg: r.error || 'Send failed.' }
+      );
+    } catch (e) {
+      setTestResult({ ok: false, msg: e instanceof Error ? e.message : 'Send failed.' });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const providerReady = mailbox.serverConfigured;
   const providerLabel =
@@ -300,6 +322,37 @@ function MailboxTab({ mailbox, onChange }: { mailbox: Mailbox; onChange: (m: Mai
           </button>
         )}
       </div>
+
+      {/* Send a test email */}
+      {providerReady && (
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <label className="mb-1 block text-xs font-medium text-slate-500">Send a test email to</label>
+          <div className="flex gap-2">
+            <input
+              value={testTo}
+              onChange={(e) => setTestTo(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && runTest()}
+              placeholder="you@example.com"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <button
+              onClick={runTest}
+              disabled={!testTo.trim() || testing}
+              className="shrink-0 rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900 disabled:opacity-50"
+            >
+              {testing ? 'Sending…' : 'Send test'}
+            </button>
+          </div>
+          {testResult && (
+            <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${testResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+              {testResult.msg}
+            </p>
+          )}
+          <p className="mt-2 text-[11px] text-slate-400">
+            Using Mailtrap sandbox, the message lands in your Mailtrap inbox, not the address above.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
