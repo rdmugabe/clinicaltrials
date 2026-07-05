@@ -6,38 +6,39 @@ import type { OutreachRecord, EmailTemplate, OrganizationSettings } from '../typ
 // Any SMTP provider (Mailtrap, Gmail, Brevo, Resend, SendGrid SMTP, …) can be
 // used by setting SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS. SMTP takes
 // precedence when configured; otherwise we fall back to the SendGrid API.
-const SMTP_HOST = process.env.SMTP_HOST;
-const SMTP_PORT = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
-const SMTP_USER = process.env.SMTP_USER;
-const SMTP_PASS = process.env.SMTP_PASS;
-// Default: implicit TLS on 465, STARTTLS otherwise. Override with SMTP_SECURE.
-const SMTP_SECURE = process.env.SMTP_SECURE
-  ? process.env.SMTP_SECURE === 'true'
-  : SMTP_PORT === 465;
+//
+// IMPORTANT: env is read at call time (not module load) — dotenv.config() runs
+// after this module is first imported, so reading at load time would miss it.
+function smtpEnv() {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
+  // Default: implicit TLS on 465, STARTTLS otherwise. Override with SMTP_SECURE.
+  const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465;
+  return { host, user, pass, port, secure, ready: !!(host && user && pass) };
+}
 
-const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-// A real SendGrid key starts with "SG." — this ignores the .env placeholder.
-const SENDGRID_READY = !!SENDGRID_API_KEY && SENDGRID_API_KEY.startsWith('SG.');
-const SMTP_READY = !!(SMTP_HOST && SMTP_USER && SMTP_PASS);
-
-if (SENDGRID_READY) {
-  sgMail.setApiKey(SENDGRID_API_KEY!);
+/** The SendGrid key, but only if it's real (starts with "SG.") — ignores the .env placeholder. */
+function sendgridKey(): string | null {
+  const k = process.env.SENDGRID_API_KEY;
+  return k && k.startsWith('SG.') ? k : null;
 }
 
 export class EmailService {
-  private fromEmail: string;
-  private fromName: string;
   private smtp: Transporter | null = null;
 
-  constructor() {
-    this.fromEmail = process.env.FROM_EMAIL || 'noreply@example.com';
-    this.fromName = process.env.FROM_NAME || 'Clinical Trials Research';
+  private get fromEmail(): string {
+    return process.env.FROM_EMAIL || 'noreply@example.com';
+  }
+  private get fromName(): string {
+    return process.env.FROM_NAME || 'Clinical Trials Research';
   }
 
   /** Which provider will actually send: 'smtp' | 'sendgrid' | 'none'. */
   provider(): 'smtp' | 'sendgrid' | 'none' {
-    if (SMTP_READY) return 'smtp';
-    if (SENDGRID_READY) return 'sendgrid';
+    if (smtpEnv().ready) return 'smtp';
+    if (sendgridKey()) return 'sendgrid';
     return 'none';
   }
 
@@ -48,12 +49,8 @@ export class EmailService {
   /** Lazily build (and reuse) the SMTP transport. */
   private getSmtp(): Transporter {
     if (!this.smtp) {
-      this.smtp = nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        secure: SMTP_SECURE,
-        auth: { user: SMTP_USER, pass: SMTP_PASS },
-      });
+      const { host, port, secure, user, pass } = smtpEnv();
+      this.smtp = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
     }
     return this.smtp;
   }
@@ -119,6 +116,7 @@ export class EmailService {
 
     // SendGrid API path.
     try {
+      sgMail.setApiKey(sendgridKey()!);
       const msg = {
         to,
         from: {
