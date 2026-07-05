@@ -19,6 +19,12 @@ interface SeqRow {
   updated_at: string;
 }
 
+/** Sender name for {{senderName}} — the connected mailbox, else env, else a default. */
+function mailboxFromName(): string {
+  const r = db.prepare('SELECT from_name FROM mailbox WHERE id = 1').get() as { from_name?: string } | undefined;
+  return r?.from_name || process.env.FROM_NAME || 'Our team';
+}
+
 function enrolledCount(sequenceId: string): number {
   return (
     db.prepare('SELECT COUNT(*) AS n FROM sequence_enrollments WHERE sequence_id = ?').get(sequenceId) as {
@@ -213,10 +219,22 @@ export const sequenceService = {
         continue;
       }
 
+      // Personalize merge fields ({{name}}, {{firstName}}, {{email}}, {{senderName}}).
+      const contactName = (e.contact_name as string) || email.split('@')[0];
+      const vars: Record<string, string> = {
+        name: contactName,
+        firstName: contactName.split(' ')[0],
+        first_name: contactName.split(' ')[0],
+        email,
+        senderName: mailboxFromName(),
+      };
+      const finalSubject = emailService.replaceVariables(step.subject, vars);
+      const finalBody = emailService.replaceVariables(step.body, vars);
+
       // Attempt a real send only if the mailbox/provider is configured.
       if (emailService.isConfigured()) {
         try {
-          await emailService.sendEmail(email, step.subject, step.body, {});
+          await emailService.sendEmail(email, finalSubject, finalBody, {});
         } catch (err) {
           console.error('Sequence send failed:', err);
         }
@@ -225,7 +243,7 @@ export const sequenceService = {
       db.prepare(
         `INSERT INTO sequence_sends (id, sequence_id, enrollment_id, step_index, subject, to_email, status, created_at)
          VALUES (?, ?, ?, ?, ?, ?, 'sent', ?)`
-      ).run(`snd_${randomUUID()}`, seq.id, enrollmentId, stepIdx, step.subject, email, now);
+      ).run(`snd_${randomUUID()}`, seq.id, enrollmentId, stepIdx, finalSubject, email, now);
 
       const nextIdx = stepIdx + 1;
       const nextStep = seq.steps[nextIdx];
