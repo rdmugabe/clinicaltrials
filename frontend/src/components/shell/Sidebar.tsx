@@ -30,6 +30,7 @@ const ICONS: Record<string, string> = {
   check: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
   chart: 'M9 19v-6m4 6V5m4 14v-9M5 21h14',
   team: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197',
+  spark: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.4 6.6L22 12l-6.6 2.4L13 21l-2.4-6.6L4 12l6.6-2.4L13 3z',
 };
 
 function Icon({ name, className }: { name: string; className?: string }) {
@@ -46,6 +47,7 @@ export default function Sidebar({ onOpenOutreach, onOpenAlerts }: SidebarProps) 
   const studyFinder: NavItem[] = [
     { label: 'Discover Studies', href: '/discover', icon: 'discover' },
     { label: 'Scouts', href: '/scouts', icon: 'scout' },
+    { label: 'Insights', href: '/insights', icon: 'spark' },
     { label: 'Contacts', href: '/contacts', icon: 'contacts' },
     { label: 'Companies', href: '/companies', icon: 'building' },
     { label: 'FQ Filler', icon: 'document', soon: true },

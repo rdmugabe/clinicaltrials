@@ -324,6 +324,42 @@ export interface FeedResponse {
   nextPageToken?: string;
 }
 
+// ============ INSIGHTS ============
+
+export interface NewsItem {
+  title: string;
+  url: string;
+  source?: string;
+  date?: string;
+  insight?: string;
+}
+export interface WebNewsResult {
+  enabled: boolean;
+  reason?: string;
+  summary?: string;
+  items?: NewsItem[];
+}
+export interface Insights {
+  topic: string;
+  aiConfigured: boolean;
+  newStudies: StudyCard[];
+  updatedStudies: StudyCard[];
+  news: WebNewsResult;
+}
+export interface ScoutInsightRow {
+  scoutId: string;
+  scoutName: string;
+  color?: string;
+  indication?: string;
+  newStudies: StudyCard[];
+  updatedStudies: StudyCard[];
+}
+export interface GlobalInsights {
+  aiConfigured: boolean;
+  scouts: ScoutInsightRow[];
+  news: WebNewsResult;
+}
+
 /** A study registry the feed can pull from ('all' = every source merged). */
 export type StudySourceId = 'ctgov' | 'isrctn' | 'ctis';
 export type FeedSource = StudySourceId | 'all';

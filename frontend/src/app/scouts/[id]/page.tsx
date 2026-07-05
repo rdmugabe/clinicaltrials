@@ -7,19 +7,21 @@ import FeedCard from '@/components/studyfinder/FeedCard';
 import StudyDetailPanel from '@/components/studyfinder/StudyDetailPanel';
 import MultiSelectFilter from '@/components/studyfinder/MultiSelectFilter';
 import SortControl from '@/components/studyfinder/SortControl';
+import InsightsPanel from '@/components/studyfinder/InsightsPanel';
 import { sortStudyCards, type SortOrder } from '@/lib/sortStudies';
 import {
   getScout,
   getWeeklyReports,
   getStudiesByIds,
   getScoutStudies,
+  getScoutInsights,
   bookmarkStudy,
   removeBookmark,
   hideStudy,
   unhideStudy,
   pushToPipeline,
 } from '@/lib/api';
-import type { Scout, WeeklyReport, StudyCard, StudyStatus, StudyPhase, SortOption, FeedRegion } from '@/types';
+import type { Scout, WeeklyReport, StudyCard, StudyStatus, StudyPhase, SortOption, FeedRegion, Insights } from '@/types';
 
 const REGION_OPTIONS: { value: 'all' | FeedRegion; label: string }[] = [
   { value: 'all', label: 'Worldwide' },
@@ -63,10 +65,13 @@ function ScoutTrackedInner() {
   const [scout, setScout] = useState<Scout | null>(null);
   const [reports, setReports] = useState<WeeklyReport[]>([]);
   // View mode: 'live' (all matching, paginated) | 'tracked' (seen set) | a report id.
+  const viewParam = searchParams.get('view');
   const initialMode =
-    searchParams.get('report') || (searchParams.get('view') === 'tracked' ? 'tracked' : 'live');
+    searchParams.get('report') ||
+    (viewParam === 'tracked' ? 'tracked' : viewParam === 'insights' ? 'insights' : 'live');
   const [reportId, setReportId] = useState<string>(initialMode);
   const [studies, setStudies] = useState<StudyCard[]>([]);
+  const [insights, setInsights] = useState<Insights | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [nextPageToken, setNextPageToken] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
@@ -106,7 +111,12 @@ function ScoutTrackedInner() {
     setLoading(true);
     setError(null);
     setNextPageToken(undefined);
-    if (reportId === 'live') {
+    if (reportId === 'insights') {
+      getScoutInsights(scoutId)
+        .then((d) => setInsights(d))
+        .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load insights'))
+        .finally(() => setLoading(false));
+    } else if (reportId === 'live') {
       getScoutStudies(scoutId, { sort: sortField, sortOrder, region })
         .then((d) => {
           setStudies(d.studies);
@@ -208,7 +218,9 @@ function ScoutTrackedInner() {
               ? 'All studies matching this Scout, live from ClinicalTrials.gov'
               : reportId === 'tracked'
                 ? "Studies captured in this Scout's tracked set"
-                : 'New studies in the selected report'}
+                : reportId === 'insights'
+                  ? 'Latest studies, updates & US news for this Scout'
+                  : 'New studies in the selected report'}
           </p>
         </div>
       </div>
@@ -220,6 +232,7 @@ function ScoutTrackedInner() {
             All matching studies{scout?.matchTotal != null ? ` (${scout.matchTotal.toLocaleString()})` : ''}
           </option>
           <option value="tracked">Tracked set ({scout?.seenNctIds.length ?? 0})</option>
+          <option value="insights">✨ Insights &amp; news</option>
           {reports.map((r) => (
             <option key={r.id} value={r.id}>
               Week of {r.weekOf} ({r.studyCount})
@@ -244,12 +257,16 @@ function ScoutTrackedInner() {
             ))}
           </div>
         )}
+        {reportId !== 'insights' && (
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search title, NCT, sponsor, condition"
           className={`${inputCls} w-64`}
         />
+        )}
+        {reportId !== 'insights' && (
+        <>
         <MultiSelectFilter
           allLabel="All statuses"
           countNoun="statuses"
@@ -288,11 +305,26 @@ function ScoutTrackedInner() {
               : `${filtered.length} of ${studies.length}`}
           </span>
         </div>
+        </>
+        )}
       </div>
 
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
-      {loading ? (
+      {reportId === 'insights' ? (
+        loading ? (
+          <div className="py-20 text-center">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-b-2 border-primary-600" />
+            <p className="mt-3 text-sm text-slate-500">Gathering studies &amp; news…</p>
+          </div>
+        ) : insights ? (
+          <InsightsPanel news={insights.news} newStudies={insights.newStudies} updatedStudies={insights.updatedStudies} />
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center text-slate-500">
+            No insights available.
+          </div>
+        )
+      ) : loading ? (
         <div className="py-20 text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-b-2 border-primary-600" />
           <p className="mt-3 text-sm text-slate-500">Loading studies…</p>

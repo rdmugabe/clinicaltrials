@@ -19,6 +19,8 @@ import type {
   FeedResponse,
   FeedFilters,
   StudySourceMeta,
+  Insights,
+  GlobalInsights,
   StudyCard,
   Scout,
   ScoutCriteria,
@@ -363,6 +365,18 @@ export async function syncFeed(): Promise<{ added: number; total: number }> {
 
 export async function getFeedSources(): Promise<{ sources: StudySourceMeta[] }> {
   return fetchApi('/feed/sources');
+}
+
+// ============ INSIGHTS ============
+
+export async function getScoutInsights(id: string): Promise<Insights> {
+  return fetchApi(`/insights/scout/${id}`);
+}
+export async function getGlobalInsights(): Promise<GlobalInsights> {
+  return fetchApi('/insights');
+}
+export async function getQueryInsights(q: string): Promise<Insights> {
+  return fetchApi(`/insights/query?q=${encodeURIComponent(q)}`);
 }
 
 export async function getStudiesByIds(nctIds: string[]): Promise<{ studies: StudyCard[] }> {

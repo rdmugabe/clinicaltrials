@@ -63,8 +63,72 @@ const EMAIL_SCHEMA = {
   additionalProperties: false,
 };
 
+export interface NewsItem {
+  title: string;
+  url: string;
+  source?: string;
+  date?: string;
+  insight?: string;
+}
+export interface WebNewsResult {
+  enabled: boolean;
+  reason?: string;
+  summary?: string;
+  items?: NewsItem[];
+}
+
+/** Pull a JSON object out of a model response that may wrap it in prose/fences. */
+function extractJson(text: string): any | null {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = fenced ? fenced[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    return null;
+  }
+}
+
 export const aiService = {
   isAiConfigured,
+
+  /**
+   * Web-search recent US news / updates relevant to a topic using Claude's
+   * web_search tool. Gated on ANTHROPIC_API_KEY — returns enabled:false when
+   * unconfigured so callers can render a graceful "connect a key" state.
+   */
+  async webNews(topic: string): Promise<WebNewsResult> {
+    if (!isAiConfigured()) {
+      return { enabled: false, reason: 'Set ANTHROPIC_API_KEY on the backend to enable AI-powered US news & insights.' };
+    }
+    const prompt = `Search the web for the most recent (roughly the last 60 days) United States news, press releases, and updates relevant to: "${topic}", in the context of clinical trials and drug development. Prioritize US-based sponsors/biotechs, trial readouts and results, FDA actions, and site/enrollment developments.
+
+Respond with ONLY a JSON object (no prose, no markdown fences) of the form:
+{"summary": "<2-3 sentence overview of what's notable right now>", "items": [{"title": "<headline>", "url": "<real source URL>", "source": "<publication>", "date": "<publish date>", "insight": "<one sentence on why it matters for BD>"}]}
+Include 4-8 items, each with a real URL you actually found via search.`;
+
+    const message = await getClient().messages.create({
+      model: MODEL,
+      max_tokens: 3000,
+      // Web search is a server-side tool; typings vary by SDK version, so cast.
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] as any,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const parsed = extractJson(textOf(message));
+    if (!parsed || !Array.isArray(parsed.items)) {
+      return { enabled: true, summary: textOf(message).slice(0, 500), items: [] };
+    }
+    const items: NewsItem[] = parsed.items
+      .filter((i: any) => i && i.title && i.url)
+      .map((i: any) => ({
+        title: String(i.title),
+        url: String(i.url),
+        source: i.source ? String(i.source) : undefined,
+        date: i.date ? String(i.date) : undefined,
+        insight: i.insight ? String(i.insight) : undefined,
+      }));
+    return { enabled: true, summary: parsed.summary ? String(parsed.summary) : undefined, items };
+  },
 
   /** Generate a multi-step outreach sequence from a short brief. */
   async generateSequence(brief: SequenceBrief): Promise<{ name: string; steps: SequenceStep[] }> {
