@@ -200,9 +200,20 @@ export function initDb(): void {
       credits_total INTEGER NOT NULL DEFAULT 500
     );
 
+    -- Shared team notes attached to any entity (study nctId or contact id).
+    CREATE TABLE IF NOT EXISTS notes (
+      id TEXT PRIMARY KEY,
+      entity_type TEXT NOT NULL,   -- 'study' | 'contact'
+      entity_id TEXT NOT NULL,
+      body TEXT NOT NULL,
+      author TEXT,
+      created_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_feed_items_date ON feed_items(date_added);
     CREATE INDEX IF NOT EXISTS idx_contacts_nct ON discovered_contacts(nct_id);
     CREATE INDEX IF NOT EXISTS idx_reports_scout ON weekly_reports(scout_id);
+    CREATE INDEX IF NOT EXISTS idx_notes_entity ON notes(entity_type, entity_id);
   `);
 
   // Seed the account + mailbox rows once.

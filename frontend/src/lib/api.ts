@@ -19,6 +19,8 @@ import type {
   FeedResponse,
   FeedFilters,
   StudySourceMeta,
+  Note,
+  NoteEntityType,
   Insights,
   GlobalInsights,
   StudyCard,
@@ -365,6 +367,30 @@ export async function syncFeed(): Promise<{ added: number; total: number }> {
 
 export async function getFeedSources(): Promise<{ sources: StudySourceMeta[] }> {
   return fetchApi('/feed/sources');
+}
+
+// ============ NOTES ============
+
+export async function getNotes(entityType: NoteEntityType, entityId: string): Promise<{ notes: Note[] }> {
+  return fetchApi(`/notes?entityType=${entityType}&entityId=${encodeURIComponent(entityId)}`);
+}
+export async function addNote(input: {
+  entityType: NoteEntityType;
+  entityId: string;
+  body: string;
+  author?: string;
+}): Promise<{ note: Note }> {
+  return fetchApi('/notes', { method: 'POST', body: JSON.stringify(input) });
+}
+export async function deleteNote(id: string): Promise<void> {
+  await fetchApi(`/notes/${id}`, { method: 'DELETE' });
+}
+export async function getNoteCounts(
+  entityType: NoteEntityType,
+  ids: string[]
+): Promise<{ counts: Record<string, number> }> {
+  if (ids.length === 0) return { counts: {} };
+  return fetchApi(`/notes/counts?entityType=${entityType}&ids=${ids.map(encodeURIComponent).join(',')}`);
 }
 
 // ============ INSIGHTS ============

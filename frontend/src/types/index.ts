@@ -324,6 +324,18 @@ export interface FeedResponse {
   nextPageToken?: string;
 }
 
+// ============ NOTES ============
+
+export type NoteEntityType = 'study' | 'contact';
+export interface Note {
+  id: string;
+  entityType: NoteEntityType;
+  entityId: string;
+  body: string;
+  author?: string;
+  createdAt: string;
+}
+
 // ============ INSIGHTS ============
 
 export interface NewsItem {

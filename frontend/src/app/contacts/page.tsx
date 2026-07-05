@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { getDiscoveredContacts, enrichContact, setContactStatus } from '@/lib/api';
+import { getDiscoveredContacts, enrichContact, setContactStatus, getNoteCounts } from '@/lib/api';
 import { useShell } from '@/components/shell/AppShell';
+import NotesModal from '@/components/studyfinder/NotesModal';
 import type { DiscoveredContact } from '@/types';
 
 export default function ContactsPage() {
@@ -12,12 +13,19 @@ export default function ContactsPage() {
   const [query, setQuery] = useState('');
   const [enrichingId, setEnrichingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
+  const [notesFor, setNotesFor] = useState<DiscoveredContact | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getDiscoveredContacts();
       setContacts(res.contacts);
+      const { counts } = await getNoteCounts(
+        'contact',
+        res.contacts.map((c) => c.id)
+      );
+      setNoteCounts(counts);
     } finally {
       setLoading(false);
     }
@@ -111,6 +119,7 @@ export default function ContactsPage() {
                 <th className="px-3 py-2">Company</th>
                 <th className="px-3 py-2">Contact</th>
                 <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Notes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -154,11 +163,38 @@ export default function ContactsPage() {
                       {c.status}
                     </span>
                   </td>
+                  <td className="px-3 py-2">
+                    <button
+                      onClick={() => setNotesFor(c)}
+                      className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Notes
+                      {noteCounts[c.id] ? (
+                        <span className="rounded-full bg-primary-600 px-1.5 text-[10px] font-semibold text-white">
+                          {noteCounts[c.id]}
+                        </span>
+                      ) : null}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {notesFor && (
+        <NotesModal
+          title={`Notes — ${notesFor.name}`}
+          subtitle={[notesFor.jobTitle, notesFor.company].filter(Boolean).join(' · ') || undefined}
+          entityType="contact"
+          entityId={notesFor.id}
+          onClose={() => setNotesFor(null)}
+          onCountChange={(n) => setNoteCounts((prev) => ({ ...prev, [notesFor.id]: n }))}
+        />
       )}
     </div>
   );

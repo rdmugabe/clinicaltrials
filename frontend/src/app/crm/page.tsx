@@ -7,7 +7,9 @@ import {
   createCompany,
   importCompanies,
   deleteCompany,
+  getNoteCounts,
 } from '@/lib/api';
+import NotesModal from '@/components/studyfinder/NotesModal';
 import type { DiscoveredContact, CrmCompany } from '@/types';
 
 type Tab = 'contacts' | 'companies';
@@ -20,6 +22,8 @@ export default function CrmPage() {
   const [query, setQuery] = useState('');
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
+  const [notesFor, setNotesFor] = useState<DiscoveredContact | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -27,6 +31,8 @@ export default function CrmPage() {
       const [c, co] = await Promise.all([getDiscoveredContacts(), getCompanies()]);
       setContacts(c.contacts);
       setCompanies(co.companies);
+      const { counts } = await getNoteCounts('contact', c.contacts.map((x) => x.id));
+      setNoteCounts(counts);
     } finally {
       setLoading(false);
     }
@@ -121,6 +127,7 @@ export default function CrmPage() {
                 <th className="px-3 py-2">Title</th>
                 <th className="px-3 py-2">Company</th>
                 <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Notes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -140,6 +147,22 @@ export default function CrmPage() {
                     <span className={`rounded-full px-2 py-0.5 text-xs ${c.status === 'In Sequence' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                       {c.status}
                     </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <button
+                      onClick={() => setNotesFor(c)}
+                      className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Notes
+                      {noteCounts[c.id] ? (
+                        <span className="rounded-full bg-primary-600 px-1.5 text-[10px] font-semibold text-white">
+                          {noteCounts[c.id]}
+                        </span>
+                      ) : null}
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -195,6 +218,17 @@ export default function CrmPage() {
             </div>
           )}
         </div>
+      )}
+
+      {notesFor && (
+        <NotesModal
+          title={`Notes — ${notesFor.name}`}
+          subtitle={[notesFor.jobTitle, notesFor.company].filter(Boolean).join(' · ') || undefined}
+          entityType="contact"
+          entityId={notesFor.id}
+          onClose={() => setNotesFor(null)}
+          onCountChange={(n) => setNoteCounts((prev) => ({ ...prev, [notesFor.id]: n }))}
+        />
       )}
 
       {showAddCompany && (

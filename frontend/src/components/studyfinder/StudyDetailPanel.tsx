@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getStudy, pushToPipeline } from '@/lib/api';
 import ContactDiscovery from './ContactDiscovery';
+import NotesPanel from './NotesPanel';
 import type { Study, StudyStatus } from '@/types';
 
 const TABS = [
@@ -16,6 +17,7 @@ const TABS = [
   'Timeline',
   'References',
   'Contacts',
+  'Notes',
 ] as const;
 type Tab = (typeof TABS)[number];
 
@@ -330,6 +332,9 @@ export default function StudyDetailPanel({
 
       case 'Contacts':
         return <ContactDiscovery nctId={id.nctId} company={sponsor?.name} />;
+
+      case 'Notes':
+        return <NotesPanel entityType="study" entityId={id.nctId} />;
 
       default:
         return null;
