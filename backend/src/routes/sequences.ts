@@ -26,6 +26,12 @@ router.get('/:id/enrollments', (req: Request, res: Response) => {
   res.json({ enrollments: sequenceService.listEnrollments(req.params.id) });
 });
 
+// POST /api/sequences/enrollments/:enrollmentId/stop — stop one recipient.
+router.post('/enrollments/:enrollmentId/stop', (req: Request, res: Response) => {
+  const ok = sequenceService.stopEnrollment(req.params.enrollmentId);
+  res.status(ok ? 200 : 404).json({ ok });
+});
+
 router.post('/', (req: Request, res: Response) => {
   if (!req.body?.name?.trim()) {
     res.status(400).json({ error: 'name is required' });

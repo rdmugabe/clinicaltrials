@@ -686,6 +686,10 @@ export async function getEnrollments(id: string): Promise<{ enrollments: Sequenc
   return fetchApi(`/sequences/${id}/enrollments`);
 }
 
+export async function stopEnrollment(enrollmentId: string): Promise<{ ok: boolean }> {
+  return fetchApi(`/sequences/enrollments/${enrollmentId}/stop`, { method: 'POST' });
+}
+
 export async function enrollContacts(
   id: string,
   contacts: { contactId?: string; name?: string; email: string }[]

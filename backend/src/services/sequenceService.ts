@@ -27,6 +27,26 @@ function enrolledCount(sequenceId: string): number {
   ).n;
 }
 
+/**
+ * Keep a discovered contact's status honest: once they're no longer in any
+ * active sequence, drop the "In Sequence" label to a neutral one.
+ */
+function syncContactStatus(contactId: string | null | undefined, neutral: string): void {
+  if (!contactId) return;
+  const active = (
+    db
+      .prepare(`SELECT COUNT(*) AS n FROM sequence_enrollments WHERE contact_id = ? AND status = 'active'`)
+      .get(contactId) as { n: number }
+  ).n;
+  if (active > 0) return; // still enrolled elsewhere — keep "In Sequence"
+  const row = db.prepare('SELECT status FROM discovered_contacts WHERE id = ?').get(contactId) as
+    | { status: string }
+    | undefined;
+  if (row && row.status === 'In Sequence') {
+    db.prepare('UPDATE discovered_contacts SET status = ? WHERE id = ?').run(neutral, contactId);
+  }
+}
+
 function rowToSeq(r: SeqRow): Sequence {
   return {
     id: r.id,
@@ -147,6 +167,19 @@ export const sequenceService = {
     }));
   },
 
+  /** Stop an active enrollment (no more sends) and drop the contact's label. */
+  stopEnrollment(enrollmentId: string): boolean {
+    const row = db.prepare('SELECT contact_id, status FROM sequence_enrollments WHERE id = ?').get(enrollmentId) as
+      | { contact_id: string | null; status: string }
+      | undefined;
+    if (!row) return false;
+    db.prepare(
+      `UPDATE sequence_enrollments SET status = 'stopped', next_send_at = NULL, updated_at = ? WHERE id = ?`
+    ).run(new Date().toISOString(), enrollmentId);
+    syncContactStatus(row.contact_id, 'Not Contacted');
+    return true;
+  },
+
   /**
    * Process all due sends across active sequences. Sends via SendGrid when
    * configured; otherwise logs a simulated send so the queue still advances.
@@ -176,6 +209,7 @@ export const sequenceService = {
           now,
           enrollmentId
         );
+        syncContactStatus(e.contact_id as string | null, 'Contacted');
         continue;
       }
 
@@ -203,6 +237,7 @@ export const sequenceService = {
         db.prepare(
           `UPDATE sequence_enrollments SET current_step = ?, status = 'completed', next_send_at = NULL, updated_at = ? WHERE id = ?`
         ).run(nextIdx, now, enrollmentId);
+        syncContactStatus(e.contact_id as string | null, 'Contacted');
       }
       processed++;
     }

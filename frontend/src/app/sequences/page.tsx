@@ -17,6 +17,7 @@ import {
 import type { Sequence, SequenceMetrics, Signature, Mailbox } from '@/types';
 import SequenceEditor from '@/components/sequences/SequenceEditor';
 import EnrollModal from '@/components/sequences/EnrollModal';
+import RecipientsModal from '@/components/sequences/RecipientsModal';
 
 type Tab = 'metrics' | 'sequences' | 'signatures' | 'mailbox';
 
@@ -41,6 +42,7 @@ function SequencesApp() {
   const [mailbox, setMailbox] = useState<Mailbox | null>(null);
   const [editing, setEditing] = useState<Sequence | 'new' | null>(null);
   const [enrolling, setEnrolling] = useState<Sequence | null>(null);
+  const [viewing, setViewing] = useState<Sequence | null>(null);
 
   const load = useCallback(async () => {
     const [m, s, sig, mb] = await Promise.all([getSequenceMetrics(), getSequences(), getSignatures(), getMailbox()]);
@@ -140,7 +142,10 @@ function SequencesApp() {
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusStyle[seq.status]}`}>{seq.status}</span>
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      {seq.steps.length} step{seq.steps.length !== 1 ? 's' : ''} · {seq.enrolledCount ?? 0} enrolled
+                      {seq.steps.length} step{seq.steps.length !== 1 ? 's' : ''} ·{' '}
+                      <button onClick={() => setViewing(seq)} className="font-medium text-primary-600 hover:underline">
+                        {seq.enrolledCount ?? 0} enrolled
+                      </button>
                     </div>
                   </div>
                   <div className="ml-auto flex items-center gap-2">
@@ -201,6 +206,7 @@ function SequencesApp() {
           }}
         />
       )}
+      {viewing && <RecipientsModal sequence={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }
