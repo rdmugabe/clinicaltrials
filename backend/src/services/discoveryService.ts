@@ -137,6 +137,11 @@ export const discoveryService = {
     return this.listContacts(nctId);
   },
 
+  get(id: string): DiscoveredContact | undefined {
+    const row = db.prepare('SELECT * FROM discovered_contacts WHERE id = ?').get(id) as ContactRow | undefined;
+    return row ? rowToContact(row) : undefined;
+  },
+
   listContacts(nctId?: string): DiscoveredContact[] {
     const rows = (
       nctId

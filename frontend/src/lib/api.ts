@@ -693,6 +693,13 @@ export async function enrollContacts(
   return fetchApi(`/sequences/${id}/enroll`, { method: 'POST', body: JSON.stringify({ contacts }) });
 }
 
+export async function sendContactEmail(
+  contactId: string,
+  data: { subject: string; body: string }
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  return fetchApi(`/discovery/contacts/${contactId}/email`, { method: 'POST', body: JSON.stringify(data) });
+}
+
 export async function getSignatures(): Promise<{ signatures: Signature[] }> {
   return fetchApi('/sequences/signatures/all');
 }

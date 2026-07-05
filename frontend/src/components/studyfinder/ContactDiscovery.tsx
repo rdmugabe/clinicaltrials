@@ -12,6 +12,8 @@ import {
 } from '@/lib/api';
 import { useShell } from '@/components/shell/AppShell';
 import NotesModal from './NotesModal';
+import ComposeEmailModal from './ComposeEmailModal';
+import AddToSequenceModal from './AddToSequenceModal';
 import type { DiscoveredContact } from '@/types';
 
 export default function ContactDiscovery({ nctId, company }: { nctId: string; company?: string }) {
@@ -29,6 +31,8 @@ export default function ContactDiscovery({ nctId, company }: { nctId: string; co
   const [notice, setNotice] = useState<string | null>(null);
   const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
   const [notesFor, setNotesFor] = useState<DiscoveredContact | null>(null);
+  const [composeFor, setComposeFor] = useState<DiscoveredContact | null>(null);
+  const [addToSeqOpen, setAddToSeqOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,13 +93,22 @@ export default function ContactDiscovery({ nctId, company }: { nctId: string; co
     }
   };
 
-  const handleAddToSequence = async () => {
-    const ids = Array.from(selected);
-    if (ids.length === 0) return;
-    await setContactStatus(ids, 'In Sequence');
-    setContacts((prev) => prev.map((c) => (selected.has(c.id) ? { ...c, status: 'In Sequence' } : c)));
-    setNotice(`${ids.length} contact${ids.length > 1 ? 's' : ''} added to sequence.`);
+  const selectedContacts = filtered.filter((c) => selected.has(c.id));
+
+  const handleEnrolled = (count: number) => {
+    // Tag the enrolled (emailed-capable) contacts and clear the selection.
+    const enrolledIds = selectedContacts.filter((c) => c.email).map((c) => c.id);
+    setContactStatus(enrolledIds, 'In Sequence').catch(() => {});
+    setContacts((prev) => prev.map((c) => (enrolledIds.includes(c.id) ? { ...c, status: 'In Sequence' } : c)));
+    setNotice(`Enrolled ${count} contact${count === 1 ? '' : 's'} into the sequence.`);
     setSelected(new Set());
+    setAddToSeqOpen(false);
+  };
+
+  const handleSent = (contact: DiscoveredContact) => {
+    setContacts((prev) => prev.map((c) => (c.id === contact.id ? { ...c, status: 'Contacted' } : c)));
+    setNotice(`Email sent to ${contact.name}.`);
+    setComposeFor(null);
   };
 
   const handleTradeShowList = () => {
@@ -176,7 +189,7 @@ export default function ContactDiscovery({ nctId, company }: { nctId: string; co
       {selected.size > 0 && (
         <div className="mb-2 flex items-center gap-3 rounded-lg bg-slate-900 px-3 py-2 text-sm text-white">
           <span>{selected.size} selected</span>
-          <button onClick={handleAddToSequence} className="rounded-md bg-primary-500 px-3 py-1 text-xs font-medium hover:bg-primary-400">
+          <button onClick={() => setAddToSeqOpen(true)} className="rounded-md bg-primary-500 px-3 py-1 text-xs font-medium hover:bg-primary-400">
             Add to Sequence
           </button>
         </div>
@@ -231,6 +244,17 @@ export default function ContactDiscovery({ nctId, company }: { nctId: string; co
                             LinkedIn ↗
                           </a>
                         )}
+                        {c.email && (
+                          <button
+                            onClick={() => setComposeFor(c)}
+                            className="mt-0.5 flex w-fit items-center gap-1 rounded border border-primary-200 bg-primary-50 px-1.5 py-0.5 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
+                          >
+                            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            Email
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <button
@@ -282,6 +306,23 @@ export default function ContactDiscovery({ nctId, company }: { nctId: string; co
           entityId={notesFor.id}
           onClose={() => setNotesFor(null)}
           onCountChange={(n) => setNoteCounts((prev) => ({ ...prev, [notesFor.id]: n }))}
+        />
+      )}
+
+      {composeFor && (
+        <ComposeEmailModal
+          contact={composeFor}
+          company={company}
+          onClose={() => setComposeFor(null)}
+          onSent={() => handleSent(composeFor)}
+        />
+      )}
+
+      {addToSeqOpen && (
+        <AddToSequenceModal
+          contacts={selectedContacts}
+          onClose={() => setAddToSeqOpen(false)}
+          onEnrolled={handleEnrolled}
         />
       )}
     </div>

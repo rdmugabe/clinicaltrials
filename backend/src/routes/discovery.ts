@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { discoveryService } from '../services/discoveryService.js';
 import { enrichmentService } from '../services/enrichmentService.js';
 import { accountService } from '../services/accountService.js';
+import { emailService } from '../services/emailService.js';
 
 const router = Router();
 
@@ -68,6 +69,27 @@ router.post('/contacts/:id/enrich', async (req: Request, res: Response) => {
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
+});
+
+// POST /api/discovery/contacts/:id/email — send a one-off email to a contact.
+router.post('/contacts/:id/email', async (req: Request, res: Response) => {
+  const { subject, body } = req.body as { subject?: string; body?: string };
+  if (!subject?.trim() || !body?.trim()) {
+    res.status(400).json({ error: 'subject and body are required' });
+    return;
+  }
+  const contact = discoveryService.get(req.params.id);
+  if (!contact) {
+    res.status(404).json({ error: 'Contact not found' });
+    return;
+  }
+  if (!contact.email) {
+    res.status(400).json({ error: 'Contact has no email — enrich them first' });
+    return;
+  }
+  const result = await emailService.sendEmail(contact.email, subject, body);
+  if (result.success) discoveryService.setStatus([contact.id], 'Contacted');
+  res.status(result.success ? 200 : 502).json(result);
 });
 
 // POST /api/discovery/contacts/status — bulk status update (e.g. "In Sequence").
