@@ -18,6 +18,7 @@ import type {
   AlertFrequency,
   FeedResponse,
   FeedFilters,
+  StudySourceMeta,
   StudyCard,
   Scout,
   ScoutCriteria,
@@ -337,6 +338,7 @@ export async function testNotification(params: {
 export async function getFeed(filters: FeedFilters): Promise<FeedResponse> {
   const p = new URLSearchParams();
   p.set('tab', filters.tab);
+  if (filters.source) p.set('source', filters.source);
   if (filters.scoutId) p.set('scoutId', filters.scoutId);
   if (filters.status) p.set('status', filters.status);
   if (filters.statuses?.length) p.set('overallStatus', filters.statuses.join(','));
@@ -356,6 +358,10 @@ export async function getFeed(filters: FeedFilters): Promise<FeedResponse> {
 
 export async function syncFeed(): Promise<{ added: number; total: number }> {
   return fetchApi('/feed/sync', { method: 'POST' });
+}
+
+export async function getFeedSources(): Promise<{ sources: StudySourceMeta[] }> {
+  return fetchApi('/feed/sources');
 }
 
 export async function getStudiesByIds(nctIds: string[]): Promise<{ studies: StudyCard[] }> {

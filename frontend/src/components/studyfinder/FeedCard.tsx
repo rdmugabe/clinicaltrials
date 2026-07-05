@@ -54,9 +54,16 @@ function IconButton({
 }
 
 export default function FeedCard({ study, onSelect, onBookmark, onHide, onPush }: FeedCardProps) {
+  // Only ClinicalTrials.gov studies have an in-app detail panel; others (ISRCTN,
+  // EU CTIS) open on their own registry in a new tab.
+  const external = !study.nctId.startsWith('NCT') && !!study.sourceUrl;
+  const handleOpen = () => {
+    if (external) window.open(study.sourceUrl, '_blank', 'noopener,noreferrer');
+    else onSelect(study.nctId);
+  };
   return (
     <div
-      onClick={() => onSelect(study.nctId)}
+      onClick={handleOpen}
       className={`group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md ${
         study.hidden ? 'opacity-60' : ''
       }`}
@@ -66,6 +73,11 @@ export default function FeedCard({ study, onSelect, onBookmark, onHide, onPush }
         <span className="text-slate-400">Added {formatDate(study.dateAdded)}</span>
         <span className="text-slate-300">·</span>
         <span className="truncate text-slate-500">{study.source}</span>
+        {external && (
+          <svg className="h-3 w-3 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-label="Opens in source registry">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        )}
         <span
           className={`ml-auto shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
             FEED_STATUS_STYLES[study.feedStatus] || 'bg-slate-100 text-slate-500'

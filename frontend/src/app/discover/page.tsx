@@ -7,6 +7,7 @@ import SortControl from '@/components/studyfinder/SortControl';
 import { sortStudyCards, type SortOrder } from '@/lib/sortStudies';
 import {
   getFeed,
+  getFeedSources,
   syncFeed,
   bookmarkStudy,
   removeBookmark,
@@ -15,7 +16,17 @@ import {
   pushToPipeline,
   getScouts,
 } from '@/lib/api';
-import type { FeedTab, FeedFilters, StudyCard, StudyPhase, StudyStatus, Scout, SortOption } from '@/types';
+import type {
+  FeedTab,
+  FeedFilters,
+  FeedSource,
+  StudySourceMeta,
+  StudyCard,
+  StudyPhase,
+  StudyStatus,
+  Scout,
+  SortOption,
+} from '@/types';
 
 const TABS: { key: FeedTab; label: string }[] = [
   { key: 'foryou', label: 'For You' },
@@ -59,6 +70,10 @@ export default function DiscoverPage() {
   const [scouts, setScouts] = useState<Scout[]>([]);
   const [scoutId, setScoutId] = useState('');
 
+  // Study source (All Studies tab): ctgov | isrctn | ctis | all
+  const [source, setSource] = useState<FeedSource>('ctgov');
+  const [sources, setSources] = useState<StudySourceMeta[]>([]);
+
   // Filters
   const [statuses, setStatuses] = useState<StudyStatus[]>([]);
   const [statusOpen, setStatusOpen] = useState(false);
@@ -75,6 +90,7 @@ export default function DiscoverPage() {
   const buildFilters = useCallback(
     (pageToken?: string): FeedFilters => ({
       tab,
+      source: tab === 'all' ? source : undefined,
       scoutId: tab === 'foryou' && scoutId ? scoutId : undefined,
       statuses: statuses.length ? statuses : undefined,
       sponsor: sponsor.trim() || undefined,
@@ -87,7 +103,7 @@ export default function DiscoverPage() {
       sortOrder,
       pageToken,
     }),
-    [tab, scoutId, statuses, sponsor, phases, country, enrollmentMin, enrollmentMax, showHidden, sortField, sortOrder]
+    [tab, source, scoutId, statuses, sponsor, phases, country, enrollmentMin, enrollmentMax, showHidden, sortField, sortOrder]
   );
 
   // Client-side sort of the displayed cards (server also sorts registry queries).
@@ -122,10 +138,13 @@ export default function DiscoverPage() {
     load();
   }, [load]);
 
-  // Load scouts once for the For You scout filter.
+  // Load scouts + available sources once.
   useEffect(() => {
     getScouts()
       .then((d) => setScouts(d.scouts))
+      .catch(() => {});
+    getFeedSources()
+      .then((d) => setSources(d.sources))
       .catch(() => {});
   }, []);
 
@@ -198,7 +217,7 @@ export default function DiscoverPage() {
       <div className="mb-5">
         <h1 className="text-2xl font-bold text-slate-900">Discover Studies</h1>
         <p className="text-sm text-slate-500">
-          Clinical studies aggregated from ClinicalTrials.gov and news sources.
+          Clinical studies aggregated from ClinicalTrials.gov, ISRCTN, and the EU CTIS registry.
         </p>
       </div>
 
@@ -221,6 +240,22 @@ export default function DiscoverPage() {
 
       {/* Quick filters */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        {/* Source selector — All Studies tab only */}
+        {tab === 'all' && sources.length > 0 && (
+          <select
+            value={source}
+            onChange={(e) => setSource(e.target.value as FeedSource)}
+            className={inputCls}
+            title="Study registry source"
+          >
+            {sources.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+            <option value="all">All sources</option>
+          </select>
+        )}
         {/* Scout filter — For You tab only */}
         {tab === 'foryou' && scouts.length > 0 && (
           <select value={scoutId} onChange={(e) => setScoutId(e.target.value)} className={inputCls}>
@@ -363,6 +398,23 @@ export default function DiscoverPage() {
           ? `${totalCount.toLocaleString()} studies · showing ${studies.length}`
           : `${studies.length} ${studies.length === 1 ? 'study' : 'studies'}`}
       </div>
+
+      {/* Non-CT.gov source caveat */}
+      {tab === 'all' && source !== 'ctgov' && (
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <svg className="mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>
+            {source === 'isrctn'
+              ? 'ISRCTN returns a single batch (no deep pagination). '
+              : source === 'ctis'
+                ? 'EU CTIS results open on the CTIS portal — no in-app detail view. '
+                : 'Merged view interleaves all registries by date. '}
+            Status, phase, and enrollment filters are applied to the loaded results for these registries (they aren’t filtered server-side), and non-ClinicalTrials.gov cards open in their source registry.
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>

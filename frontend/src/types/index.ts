@@ -324,8 +324,19 @@ export interface FeedResponse {
   nextPageToken?: string;
 }
 
+/** A study registry the feed can pull from ('all' = every source merged). */
+export type StudySourceId = 'ctgov' | 'isrctn' | 'ctis';
+export type FeedSource = StudySourceId | 'all';
+
+export interface StudySourceMeta {
+  id: StudySourceId;
+  label: string;
+  hasDetail: boolean;
+}
+
 export interface FeedFilters {
   tab: FeedTab;
+  source?: FeedSource;
   scoutId?: string;
   status?: FeedStatus;
   statuses?: StudyStatus[];

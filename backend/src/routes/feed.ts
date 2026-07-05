@@ -1,9 +1,15 @@
 import { Router, Request, Response } from 'express';
 import { feedService, type FeedQuery } from '../services/feedService.js';
+import { sourceCatalog } from '../services/sources/index.js';
 import type { StudyCard } from '../types/studyfinder.js';
 import type { StudyPhase, StudyStatus, SortOption } from '../types/clinicalTrials.js';
 
 const router = Router();
+
+// GET /api/feed/sources — the study sources the feed can pull from.
+router.get('/sources', (_req: Request, res: Response) => {
+  res.json({ sources: sourceCatalog() });
+});
 
 // GET /api/feed — the Discover Studies feed (For You / All / Bookmarks).
 router.get('/', async (req: Request, res: Response) => {
@@ -25,6 +31,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     const query: FeedQuery = {
       tab,
+      source: (q.source as string) || undefined,
       scoutId: (q.scoutId as string) || undefined,
       status: q.status as FeedQuery['status'],
       statuses,

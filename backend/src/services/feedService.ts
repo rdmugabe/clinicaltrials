@@ -1,11 +1,14 @@
 import { db } from '../db/database.js';
 import { clinicalTrialsService } from './clinicalTrialsService.js';
 import { toStudyCard } from './studyMapper.js';
+import { SOURCES, getSource, clinicalTrialsSource } from './sources/index.js';
+import type { SourceSearchInput } from './sources/types.js';
 import type { SearchParams, StudyPhase, StudyStatus, Study, SortOption } from '../types/clinicalTrials.js';
 import type { StudyCard, FeedStatus } from '../types/studyfinder.js';
 
 export interface FeedQuery {
   tab: 'all' | 'foryou' | 'bookmarks';
+  source?: string; // 'ctgov' (default) | 'isrctn' | 'ctis' | 'all' — All Studies tab
   scoutId?: string; // For You: restrict to a single scout
   status?: FeedStatus; // coarse bucket (legacy)
   statuses?: StudyStatus[]; // granular registry overallStatus values
@@ -62,6 +65,19 @@ function feedLedger(): Map<string, { source: string; sourceUrl?: string; dateAdd
     map.set(r.nct_id, { source: r.source, sourceUrl: r.source_url, dateAdded: r.date_added });
   }
   return map;
+}
+
+/** Pack per-source pagination cursors into one opaque token for the merged view. */
+function encodeCursor(cursors: Record<string, string>): string {
+  return Buffer.from(JSON.stringify(cursors)).toString('base64');
+}
+function decodeCursor(token?: string): Record<string, string | undefined> {
+  if (!token) return {};
+  try {
+    return JSON.parse(Buffer.from(token, 'base64').toString('utf8')) as Record<string, string>;
+  } catch {
+    return {};
+  }
 }
 
 /** Apply client-side filters the registry API can't express (enrollment range, hidden). */
@@ -139,17 +155,67 @@ export const feedService = {
       return this.getForYou(q);
     }
 
-    // 'all' — live registry query.
-    const res = await clinicalTrialsService.searchStudies(buildSearchParams(q));
-    const cards = res.studies.map((s: Study) => toStudyCard(s));
-    const decorated = decorate(cards);
-    const hd = hiddenIds();
-    const filtered = applyLocalFilters(decorated, q, hd);
-    return {
-      studies: filtered,
-      totalCount: res.totalCount,
-      nextPageToken: res.nextPageToken,
+    // 'all' — live query against one source, or all sources merged.
+    return this.searchSources(q);
+  },
+
+  /**
+   * Run the "All Studies" query against the selected source (ctgov by default),
+   * or against every source when source==='all', merging their results. Each
+   * source paginates on its own cursor; for the merged view the cursors are
+   * packed into one opaque token.
+   */
+  async searchSources(q: FeedQuery): Promise<FeedResponse> {
+    const input: SourceSearchInput = {
+      condition: q.condition,
+      sponsor: q.sponsor,
+      country: q.country,
+      statuses: q.statuses,
+      phases: q.phases,
+      sort: q.sort,
+      sortOrder: q.sortOrder,
+      pageSize: q.pageSize || 24,
     };
+    const hd = hiddenIds();
+
+    // Merged multi-source view.
+    if (q.source === 'all') {
+      const cursors = decodeCursor(q.pageToken);
+      const per = Math.max(8, Math.round((q.pageSize || 24) / SOURCES.length));
+      const settled = await Promise.all(
+        SOURCES.map(async (src) => {
+          // Sources that can't paginate (no prior cursor recorded) only
+          // contribute to the first page, so "Load more" doesn't repeat them.
+          if (q.pageToken && cursors[src.id] === undefined) return null;
+          try {
+            const r = await src.search({ ...input, pageSize: per, cursor: cursors[src.id] });
+            return { id: src.id, ...r };
+          } catch (err) {
+            console.error(`Source "${src.id}" failed`, err);
+            return null;
+          }
+        })
+      );
+      const live = settled.filter((r): r is NonNullable<typeof r> => !!r);
+      const cards = live.flatMap((r) => r.cards);
+      const totalCount = live.reduce((sum, r) => sum + r.totalCount, 0);
+      const nextCursors: Record<string, string> = {};
+      for (const r of live) if (r.nextCursor) nextCursors[r.id] = r.nextCursor;
+
+      const filtered = applyLocalFilters(decorate(cards), q, hd);
+      filtered.sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
+      return {
+        studies: filtered,
+        totalCount,
+        nextPageToken: Object.keys(nextCursors).length ? encodeCursor(nextCursors) : undefined,
+      };
+    }
+
+    // Single source.
+    const src = getSource(q.source) || clinicalTrialsSource;
+    const r = await src.search({ ...input, cursor: q.pageToken });
+    const filtered = applyLocalFilters(decorate(r.cards), q, hd);
+    return { studies: filtered, totalCount: r.totalCount, nextPageToken: r.nextCursor };
   },
 
   /**
