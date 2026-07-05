@@ -31,6 +31,8 @@ export interface SearchParams {
   location?: string;
   sponsor?: string;
   term?: string;
+  /** Raw Essie expression passed through as filter.advanced (e.g. geo filters). */
+  advanced?: string;
   status?: StudyStatus[];
   phase?: StudyPhase[];
   sort?: SortOption;

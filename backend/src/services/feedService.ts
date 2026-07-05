@@ -9,6 +9,7 @@ import type { StudyCard, FeedStatus } from '../types/studyfinder.js';
 export interface FeedQuery {
   tab: 'all' | 'foryou' | 'bookmarks';
   source?: string; // 'ctgov' (default) | 'isrctn' | 'ctis' | 'all' — All Studies tab
+  region?: 'us' | 'world'; // geographic scope for the All Studies tab
   scoutId?: string; // For You: restrict to a single scout
   status?: FeedStatus; // coarse bucket (legacy)
   statuses?: StudyStatus[]; // granular registry overallStatus values
@@ -170,6 +171,7 @@ export const feedService = {
       condition: q.condition,
       sponsor: q.sponsor,
       country: q.country,
+      region: q.region,
       statuses: q.statuses,
       phases: q.phases,
       sort: q.sort,

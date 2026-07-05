@@ -32,6 +32,7 @@ router.get('/', async (req: Request, res: Response) => {
     const query: FeedQuery = {
       tab,
       source: (q.source as string) || undefined,
+      region: q.region === 'us' || q.region === 'world' ? q.region : undefined,
       scoutId: (q.scoutId as string) || undefined,
       status: q.status as FeedQuery['status'],
       statuses,

@@ -9,11 +9,15 @@ export type StudySourceId = 'ctgov' | 'isrctn' | 'ctis';
  * its own registry's query language as best it can; filters a registry can't
  * express server-side are applied downstream in feedService.applyLocalFilters.
  */
+/** Geographic scope: US-based studies vs. the rest of the world (ex-US). */
+export type Region = 'us' | 'world';
+
 export interface SourceSearchInput {
   condition?: string;
   term?: string;
   sponsor?: string;
   country?: string;
+  region?: Region;
   statuses?: StudyStatus[];
   phases?: StudyPhase[];
   sort?: SortOption;

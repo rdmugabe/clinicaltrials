@@ -334,9 +334,13 @@ export interface StudySourceMeta {
   hasDetail: boolean;
 }
 
+/** Geographic scope for the feed: US-based vs. rest of world (ex-US). */
+export type FeedRegion = 'us' | 'world';
+
 export interface FeedFilters {
   tab: FeedTab;
   source?: FeedSource;
+  region?: FeedRegion;
   scoutId?: string;
   status?: FeedStatus;
   statuses?: StudyStatus[];

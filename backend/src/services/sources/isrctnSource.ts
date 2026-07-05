@@ -60,7 +60,9 @@ function deriveStatus(start?: string, end?: string): StudyStatus {
 
 /** Build ISRCTN query text from the normalized filters (empty ⇒ browse recent). */
 function buildQuery(input: SourceSearchInput): string {
-  return [input.condition, input.term, input.sponsor, input.country]
+  // ISRCTN can't negate, so 'world' is a no-op; 'us' narrows via free-text.
+  const regionTerm = input.region === 'us' ? 'United States' : undefined;
+  return [input.condition, input.term, input.sponsor, input.country, regionTerm]
     .filter((v): v is string => !!v && v.trim().length > 0)
     .join(' ')
     .trim();

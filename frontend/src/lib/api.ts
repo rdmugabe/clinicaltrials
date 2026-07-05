@@ -339,6 +339,7 @@ export async function getFeed(filters: FeedFilters): Promise<FeedResponse> {
   const p = new URLSearchParams();
   p.set('tab', filters.tab);
   if (filters.source) p.set('source', filters.source);
+  if (filters.region) p.set('region', filters.region);
   if (filters.scoutId) p.set('scoutId', filters.scoutId);
   if (filters.status) p.set('status', filters.status);
   if (filters.statuses?.length) p.set('overallStatus', filters.statuses.join(','));

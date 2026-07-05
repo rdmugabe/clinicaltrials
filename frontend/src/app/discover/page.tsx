@@ -20,6 +20,7 @@ import type {
   FeedTab,
   FeedFilters,
   FeedSource,
+  FeedRegion,
   StudySourceMeta,
   StudyCard,
   StudyPhase,
@@ -27,6 +28,12 @@ import type {
   Scout,
   SortOption,
 } from '@/types';
+
+const REGION_OPTIONS: { value: '' | FeedRegion; label: string }[] = [
+  { value: '', label: 'Worldwide' },
+  { value: 'us', label: 'USA' },
+  { value: 'world', label: 'Ex-US' },
+];
 
 const TABS: { key: FeedTab; label: string }[] = [
   { key: 'foryou', label: 'For You' },
@@ -74,6 +81,9 @@ export default function DiscoverPage() {
   const [source, setSource] = useState<FeedSource>('ctgov');
   const [sources, setSources] = useState<StudySourceMeta[]>([]);
 
+  // Geographic scope (All Studies tab): '' = worldwide | 'us' | 'world' (ex-US)
+  const [region, setRegion] = useState<'' | FeedRegion>('');
+
   // Filters
   const [statuses, setStatuses] = useState<StudyStatus[]>([]);
   const [statusOpen, setStatusOpen] = useState(false);
@@ -91,6 +101,7 @@ export default function DiscoverPage() {
     (pageToken?: string): FeedFilters => ({
       tab,
       source: tab === 'all' ? source : undefined,
+      region: tab === 'all' && region ? region : undefined,
       scoutId: tab === 'foryou' && scoutId ? scoutId : undefined,
       statuses: statuses.length ? statuses : undefined,
       sponsor: sponsor.trim() || undefined,
@@ -103,7 +114,7 @@ export default function DiscoverPage() {
       sortOrder,
       pageToken,
     }),
-    [tab, source, scoutId, statuses, sponsor, phases, country, enrollmentMin, enrollmentMax, showHidden, sortField, sortOrder]
+    [tab, source, region, scoutId, statuses, sponsor, phases, country, enrollmentMin, enrollmentMax, showHidden, sortField, sortOrder]
   );
 
   // Client-side sort of the displayed cards (server also sorts registry queries).
@@ -255,6 +266,25 @@ export default function DiscoverPage() {
             ))}
             <option value="all">All sources</option>
           </select>
+        )}
+        {/* Region segmented control — All Studies tab only */}
+        {tab === 'all' && (
+          <div className="inline-flex rounded-lg border border-slate-300 p-0.5" role="radiogroup" aria-label="Geographic scope">
+            {REGION_OPTIONS.map((r) => (
+              <button
+                key={r.value || 'all'}
+                type="button"
+                role="radio"
+                aria-checked={region === r.value}
+                onClick={() => setRegion(r.value)}
+                className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                  region === r.value ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
         )}
         {/* Scout filter — For You tab only */}
         {tab === 'foryou' && scouts.length > 0 && (

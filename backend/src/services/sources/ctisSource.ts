@@ -114,6 +114,10 @@ export const ctisSource: StudySource = {
   hasDetail: false,
 
   async search(input: SourceSearchInput): Promise<SourceSearchResult> {
+    // CTIS covers EU/EEA trials only — there are no US-based studies here, so a
+    // US region filter yields nothing rather than misleading EU results.
+    if (input.region === 'us') return { cards: [], totalCount: 0 };
+
     const size = input.pageSize || 24;
     const page = input.cursor ? Number(input.cursor) : 1;
     const term = buildTerm(input);

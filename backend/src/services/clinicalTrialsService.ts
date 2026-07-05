@@ -32,6 +32,12 @@ export class ClinicalTrialsService {
       url.searchParams.set('filter.overallStatus', params.status.join(','));
     }
 
+    // Advanced Essie expression (used for geo region filtering, e.g.
+    // AREA[LocationCountry]United States, or its NOT form for ex-US).
+    if (params.advanced) {
+      url.searchParams.set('filter.advanced', params.advanced);
+    }
+
     // Phase filter uses aggFilters. Multiple phases must be space-separated
     // VALUES within a single `phase` facet (OR). Using comma-separated
     // `phase:2,phase:3,...` creates separate facets and only the last applies.
