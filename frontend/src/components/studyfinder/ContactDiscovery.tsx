@@ -8,8 +8,10 @@ import {
   setContactStatus,
   getRelevantTitles,
   getEnrichmentStatus,
+  getNoteCounts,
 } from '@/lib/api';
 import { useShell } from '@/components/shell/AppShell';
+import NotesModal from './NotesModal';
 import type { DiscoveredContact } from '@/types';
 
 export default function ContactDiscovery({ nctId, company }: { nctId: string; company?: string }) {
@@ -25,6 +27,8 @@ export default function ContactDiscovery({ nctId, company }: { nctId: string; co
   const [showTitleHelper, setShowTitleHelper] = useState(false);
   const [enrichmentConfigured, setEnrichmentConfigured] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
+  const [notesFor, setNotesFor] = useState<DiscoveredContact | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -32,9 +36,11 @@ export default function ContactDiscovery({ nctId, company }: { nctId: string; co
       // Extract contacts from the study record (idempotent), then read them back.
       const res = await discoverContacts(nctId);
       setContacts(res.contacts);
+      getNoteCounts('contact', res.contacts.map((c) => c.id)).then((d) => setNoteCounts(d.counts)).catch(() => {});
     } catch {
       const res = await getDiscoveredContacts(nctId);
       setContacts(res.contacts);
+      getNoteCounts('contact', res.contacts.map((c) => c.id)).then((d) => setNoteCounts(d.counts)).catch(() => {});
     } finally {
       setLoading(false);
     }
@@ -183,8 +189,8 @@ export default function ContactDiscovery({ nctId, company }: { nctId: string; co
           No contacts found for this study.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-200">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="w-8 px-3 py-2">
@@ -195,6 +201,7 @@ export default function ContactDiscovery({ nctId, company }: { nctId: string; co
                 <th className="px-3 py-2">Location</th>
                 <th className="px-3 py-2">Contact</th>
                 <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Notes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -244,11 +251,38 @@ export default function ContactDiscovery({ nctId, company }: { nctId: string; co
                       {c.status}
                     </span>
                   </td>
+                  <td className="px-3 py-2">
+                    <button
+                      onClick={() => setNotesFor(c)}
+                      className="flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Notes
+                      {noteCounts[c.id] ? (
+                        <span className="rounded-full bg-primary-600 px-1.5 text-[10px] font-semibold text-white">
+                          {noteCounts[c.id]}
+                        </span>
+                      ) : null}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {notesFor && (
+        <NotesModal
+          title={`Notes — ${notesFor.name}`}
+          subtitle={[notesFor.jobTitle, notesFor.company || company].filter(Boolean).join(' · ') || undefined}
+          entityType="contact"
+          entityId={notesFor.id}
+          onClose={() => setNotesFor(null)}
+          onCountChange={(n) => setNoteCounts((prev) => ({ ...prev, [notesFor.id]: n }))}
+        />
       )}
     </div>
   );
