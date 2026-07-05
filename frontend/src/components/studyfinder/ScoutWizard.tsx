@@ -68,6 +68,10 @@ export default function ScoutWizard({
     existing ? existing.criteria?.locations || [] : ['United States']
   );
   const [locationInput, setLocationInput] = useState('');
+  // Geographic scope: '' = worldwide | 'us' | 'world' (ex-US). New scouts default to US.
+  const [region, setRegion] = useState<'' | 'us' | 'world'>(
+    existing ? existing.criteria?.region ?? '' : 'us'
+  );
   const toggleLocation = (loc: string) =>
     setLocations((prev) => (prev.includes(loc) ? prev.filter((l) => l !== loc) : [...prev, loc]));
 
@@ -167,6 +171,7 @@ export default function ScoutWizard({
         keywords,
         excludeKeywords,
         locations,
+        region: region || undefined,
       };
       const color = existing?.color || COLORS[name.trim().length % COLORS.length];
       const scout = editing
@@ -417,6 +422,32 @@ export default function ScoutWizard({
             <div>
               <h3 className="text-sm font-semibold text-slate-900">Geographic Locations</h3>
               <p className="mb-3 text-xs text-slate-500">Add countries to monitor studies in specific regions.</p>
+
+              {/* Region scope — applies to this Scout's feed and weekly reports */}
+              <div className="mb-4">
+                <label className="mb-1.5 block text-xs font-medium text-slate-600">Study region (ClinicalTrials.gov)</label>
+                <div className="inline-flex rounded-lg border border-slate-300 p-0.5">
+                  {([
+                    { value: '', label: 'Worldwide' },
+                    { value: 'us', label: 'USA only' },
+                    { value: 'world', label: 'Ex-US' },
+                  ] as const).map((r) => (
+                    <button
+                      key={r.value || 'all'}
+                      type="button"
+                      onClick={() => setRegion(r.value)}
+                      className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                        region === r.value ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Filters this Scout&apos;s matches and weekly reports by trial location (US vs. rest of world).
+                </p>
+              </div>
 
               <div className="mb-4 rounded-xl border border-primary-100 bg-primary-50/60 p-3">
                 <h4 className="mb-1 text-xs font-semibold text-primary-800">Location Format</h4>

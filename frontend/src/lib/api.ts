@@ -397,12 +397,13 @@ export async function getScout(id: string): Promise<Scout> {
 
 export async function getScoutStudies(
   id: string,
-  opts?: { pageToken?: string; sort?: SortOption; sortOrder?: 'asc' | 'desc' }
+  opts?: { pageToken?: string; sort?: SortOption; sortOrder?: 'asc' | 'desc'; region?: 'us' | 'world' | 'all' }
 ): Promise<FeedResponse> {
   const p = new URLSearchParams();
   if (opts?.pageToken) p.set('pageToken', opts.pageToken);
   if (opts?.sort) p.set('sort', opts.sort);
   if (opts?.sortOrder) p.set('sortOrder', opts.sortOrder);
+  if (opts?.region) p.set('region', opts.region);
   const q = p.toString();
   return fetchApi(`/scouts/${id}/studies${q ? `?${q}` : ''}`);
 }

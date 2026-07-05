@@ -42,6 +42,8 @@ export interface ScoutCriteria {
   keywords: string[];
   excludeKeywords: string[];
   locations: string[];
+  /** Geographic scope: 'us' | 'world' (ex-US); undefined ⇒ worldwide. */
+  region?: 'us' | 'world';
 }
 
 export interface Scout {

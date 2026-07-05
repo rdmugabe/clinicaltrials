@@ -1,16 +1,8 @@
 import { clinicalTrialsService } from '../clinicalTrialsService.js';
 import { toStudyCard } from '../studyMapper.js';
+import { regionAdvanced } from './geo.js';
 import type { SearchParams } from '../../types/clinicalTrials.js';
-import type { StudySource, SourceSearchInput, SourceSearchResult, Region } from './types.js';
-
-const US_COUNTRY = 'AREA[LocationCountry]United States';
-
-/** Translate a region into a ClinicalTrials.gov advanced (Essie) geo filter. */
-function regionFilter(region?: Region): string | undefined {
-  if (region === 'us') return US_COUNTRY;
-  if (region === 'world') return `NOT ${US_COUNTRY}`;
-  return undefined;
-}
+import type { StudySource, SourceSearchInput, SourceSearchResult } from './types.js';
 
 /**
  * ClinicalTrials.gov — the primary source. Supports the full filter set and
@@ -27,7 +19,7 @@ export const clinicalTrialsSource: StudySource = {
       term: input.term,
       sponsor: input.sponsor,
       location: input.country,
-      advanced: regionFilter(input.region),
+      advanced: regionAdvanced(input.region),
       status: input.statuses,
       phase: input.phases,
       sort: input.sort || 'LastUpdatePostDate',

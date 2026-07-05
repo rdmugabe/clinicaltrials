@@ -19,7 +19,21 @@ import {
   unhideStudy,
   pushToPipeline,
 } from '@/lib/api';
-import type { Scout, WeeklyReport, StudyCard, StudyStatus, StudyPhase, SortOption } from '@/types';
+import type { Scout, WeeklyReport, StudyCard, StudyStatus, StudyPhase, SortOption, FeedRegion } from '@/types';
+
+const REGION_OPTIONS: { value: 'all' | FeedRegion; label: string }[] = [
+  { value: 'all', label: 'Worldwide' },
+  { value: 'us', label: 'USA' },
+  { value: 'world', label: 'Ex-US' },
+];
+
+/** Default the region toggle from the scout's saved scope (region, else a US-only location). */
+function inferRegion(s: Scout): 'all' | FeedRegion {
+  if (s.criteria?.region) return s.criteria.region;
+  const locs = s.criteria?.locations ?? [];
+  if (locs.length === 1 && /^(united states|usa|u\.?s\.?a?\.?)$/i.test(locs[0].trim())) return 'us';
+  return 'all';
+}
 
 const STATUS_OPTIONS: { value: StudyStatus; label: string }[] = [
   { value: 'RECRUITING', label: 'Recruiting' },
@@ -66,12 +80,17 @@ function ScoutTrackedInner() {
   const [phases, setPhases] = useState<StudyPhase[]>([]);
   const [sortField, setSortField] = useState<SortOption>('LastUpdatePostDate');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  // Region view override (live mode): 'all' | 'us' | 'world'. Defaults to the
+  // scout's own saved region once it loads.
+  const [region, setRegion] = useState<'all' | FeedRegion>('all');
 
   useEffect(() => {
     Promise.all([getScout(scoutId), getWeeklyReports(scoutId)])
       .then(([s, r]) => {
         setScout(s);
         setReports(r.reports);
+        // Seed the region view from the scout's saved geographic scope.
+        setRegion(inferRegion(s));
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load scout'));
   }, [scoutId]);
@@ -88,7 +107,7 @@ function ScoutTrackedInner() {
     setError(null);
     setNextPageToken(undefined);
     if (reportId === 'live') {
-      getScoutStudies(scoutId, { sort: sortField, sortOrder })
+      getScoutStudies(scoutId, { sort: sortField, sortOrder, region })
         .then((d) => {
           setStudies(d.studies);
           setTotalCount(d.totalCount);
@@ -106,13 +125,13 @@ function ScoutTrackedInner() {
         .finally(() => setLoading(false));
     }
     // In live mode the server sorts globally so pagination stays consistent.
-  }, [reportId, nctIds, scout, scoutId, sortField, sortOrder]);
+  }, [reportId, nctIds, scout, scoutId, sortField, sortOrder, region]);
 
   const loadMore = async () => {
     if (!nextPageToken) return;
     setLoadingMore(true);
     try {
-      const d = await getScoutStudies(scoutId, { pageToken: nextPageToken, sort: sortField, sortOrder });
+      const d = await getScoutStudies(scoutId, { pageToken: nextPageToken, sort: sortField, sortOrder, region });
       setStudies((prev) => [...prev, ...d.studies]);
       setNextPageToken(d.nextPageToken);
     } finally {
@@ -207,6 +226,24 @@ function ScoutTrackedInner() {
             </option>
           ))}
         </select>
+        {reportId === 'live' && (
+          <div className="inline-flex rounded-lg border border-slate-300 p-0.5" role="radiogroup" aria-label="Geographic scope">
+            {REGION_OPTIONS.map((r) => (
+              <button
+                key={r.value}
+                type="button"
+                role="radio"
+                aria-checked={region === r.value}
+                onClick={() => setRegion(r.value)}
+                className={`rounded-md px-2.5 py-1 text-sm font-medium transition-colors ${
+                  region === r.value ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        )}
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}

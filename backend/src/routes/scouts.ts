@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { scoutService } from '../services/scoutService.js';
 import { feedService } from '../services/feedService.js';
+import { regionAdvanced } from '../services/sources/geo.js';
 import type { SortOption } from '../types/clinicalTrials.js';
 
 const router = Router();
@@ -22,12 +23,26 @@ router.get('/:id/studies', async (req: Request, res: Response) => {
     const pageToken = (req.query.pageToken as string) || undefined;
     const sort = (req.query.sort as SortOption) || undefined;
     const sortOrder: 'asc' | 'desc' = req.query.sortOrder === 'asc' ? 'asc' : 'desc';
+    // Region view: when set, the toggle fully controls geography for the scout's
+    // indication — it drops the scout's saved country and applies a US / ex-US /
+    // (worldwide = none) advanced filter, so USA + Ex-US = Worldwide. When absent,
+    // the scout's own saved location scope is used.
+    const regionParam = req.query.region as string | undefined;
+    const isRegionView = regionParam === 'us' || regionParam === 'world' || regionParam === 'all';
+    const params = isRegionView
+      ? {
+          ...scout.params,
+          location: undefined,
+          advanced: regionParam === 'all' ? undefined : regionAdvanced(regionParam),
+        }
+      : scout.params;
     const result = await feedService.searchCards({
-      ...scout.params,
+      ...params,
       ...(sort ? { sort, sortOrder } : {}),
       pageToken,
     });
-    if (!pageToken) scoutService.setMatchTotal(scout.id, result.totalCount);
+    // Only refresh the cached match total for the scout's own (unfiltered) scope.
+    if (!pageToken && !isRegionView) scoutService.setMatchTotal(scout.id, result.totalCount);
     res.json(result);
   } catch (error) {
     console.error('Scout studies error:', error);

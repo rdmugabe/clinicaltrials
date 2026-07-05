@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { db } from '../db/database.js';
 import { clinicalTrialsService } from './clinicalTrialsService.js';
+import { regionAdvanced } from './sources/geo.js';
 import type { SearchParams } from '../types/clinicalTrials.js';
 import type { Scout, WeeklyReport, ScoutCriteria } from '../types/studyfinder.js';
 
@@ -62,6 +63,9 @@ function criteriaToParams(criteria: ScoutCriteria): SearchParams {
 
   if (criteria.locations.length > 0) params.location = criteria.locations.join(' OR ');
   if (criteria.phases.length > 0) params.phase = criteria.phases;
+  // Geographic scope (US / ex-US) as an advanced Essie filter.
+  const advanced = regionAdvanced(criteria.region);
+  if (advanced) params.advanced = advanced;
 
   return params;
 }
