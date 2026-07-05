@@ -39,3 +39,6 @@ coverage/
 
 # Local database
 backend/data/
+
+# TypeScript incremental build info
+*.tsbuildinfo
