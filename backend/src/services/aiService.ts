@@ -106,13 +106,22 @@ Respond with ONLY a JSON object (no prose, no markdown fences) of the form:
 {"summary": "<2-3 sentence overview of what's notable right now>", "items": [{"title": "<headline>", "url": "<real source URL>", "source": "<publication>", "date": "<publish date>", "insight": "<one sentence on why it matters for BD>"}]}
 Include 4-8 items, each with a real URL you actually found via search.`;
 
-    const message = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: 3000,
-      // Web search is a server-side tool; typings vary by SDK version, so cast.
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] as any,
-      messages: [{ role: 'user', content: prompt }],
-    });
+    let message;
+    try {
+      message = await getClient().messages.create({
+        model: MODEL,
+        max_tokens: 3000,
+        // Web search is a server-side tool; typings vary by SDK version, so cast.
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] as any,
+        messages: [{ role: 'user', content: prompt }],
+      });
+    } catch (err: any) {
+      // Never let an AI failure (billing, rate limit, outage) break the caller —
+      // degrade to a disabled state with a readable reason.
+      const detail = err?.error?.error?.message || err?.message || 'The AI request failed.';
+      console.error('webNews error:', detail);
+      return { enabled: false, reason: `US news is temporarily unavailable: ${detail}` };
+    }
 
     const parsed = extractJson(textOf(message));
     if (!parsed || !Array.isArray(parsed.items)) {
