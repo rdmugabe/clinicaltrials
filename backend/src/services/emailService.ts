@@ -1,5 +1,6 @@
 import sgMail from '@sendgrid/mail';
 import nodemailer, { type Transporter } from 'nodemailer';
+import { db } from '../db/database.js';
 import type { OutreachRecord, EmailTemplate, OrganizationSettings } from '../types/outreach.js';
 
 // ---- Provider configuration ----------------------------------------------
@@ -28,11 +29,22 @@ function sendgridKey(): string | null {
 export class EmailService {
   private smtp: Transporter | null = null;
 
+  /** Sender the user set in the Mailbox tab wins; then env; then a default. */
+  private mailboxSender(): { email?: string; name?: string } {
+    try {
+      const r = db.prepare('SELECT from_email, from_name FROM mailbox WHERE id = 1').get() as
+        | { from_email?: string; from_name?: string }
+        | undefined;
+      return { email: r?.from_email || undefined, name: r?.from_name || undefined };
+    } catch {
+      return {};
+    }
+  }
   private get fromEmail(): string {
-    return process.env.FROM_EMAIL || 'noreply@example.com';
+    return this.mailboxSender().email || process.env.FROM_EMAIL || 'noreply@example.com';
   }
   private get fromName(): string {
-    return process.env.FROM_NAME || 'Clinical Trials Research';
+    return this.mailboxSender().name || process.env.FROM_NAME || 'Clinical Trials Research';
   }
 
   /** Which provider will actually send: 'smtp' | 'sendgrid' | 'none'. */

@@ -112,10 +112,10 @@ function SequencesApp() {
             <Kpi label="Replied" value={metrics.replied} />
             <Kpi label="Open Rate" value={`${metrics.avgOpenRate}%`} />
           </div>
-          {!mailbox?.connected && (
+          {!mailbox?.serverConfigured && (
             <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              No mailbox connected — sends are simulated and open/reply tracking is unavailable. Connect a mailbox in
-              the Mailbox tab to send for real.
+              No email provider connected — sends are simulated and open/reply tracking is unavailable. Configure a
+              provider (SMTP or SendGrid) in the Mailbox tab to send for real.
             </p>
           )}
         </div>
@@ -259,31 +259,47 @@ function MailboxTab({ mailbox, onChange }: { mailbox: Mailbox; onChange: (m: Mai
   };
   const disconnect = async () => onChange(await disconnectMailbox());
 
+  const providerReady = mailbox.serverConfigured;
+  const providerLabel =
+    mailbox.serverProvider === 'smtp' ? 'SMTP' : mailbox.serverProvider === 'sendgrid' ? 'SendGrid' : null;
+
   return (
     <div className="max-w-md rounded-xl border border-slate-200 bg-white p-5">
+      {/* Backend provider status (env-configured) */}
       <div className="mb-4 flex items-center gap-2">
-        <span className={`h-2.5 w-2.5 rounded-full ${mailbox.connected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+        <span className={`h-2.5 w-2.5 rounded-full ${providerReady ? 'bg-emerald-500' : 'bg-slate-300'}`} />
         <span className="text-sm font-medium text-slate-800">
-          {mailbox.connected ? `Connected — ${mailbox.fromEmail}` : 'No mailbox connected'}
+          {providerReady
+            ? `Email provider connected${providerLabel ? ` — ${providerLabel}` : ''}`
+            : 'No email provider configured'}
         </span>
       </div>
+
+      {providerReady ? (
+        <p className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          Sends go out live via {providerLabel}. Set the sender identity below (used as the From on your emails).
+        </p>
+      ) : (
+        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          No live provider — sends are simulated. Add <code>SMTP_*</code> (e.g. Mailtrap) or a{' '}
+          <code>SENDGRID_API_KEY</code> to the backend <code>.env</code>, then restart.
+        </p>
+      )}
+
       <label className="mb-1 block text-xs font-medium text-slate-500">From email</label>
       <input value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} placeholder="you@yoursite.org" className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
       <label className="mb-1 block text-xs font-medium text-slate-500">From name</label>
       <input value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="Jane Doe" className="mb-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
       <div className="flex gap-2">
         <button onClick={connect} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
-          {mailbox.connected ? 'Update' : 'Connect mailbox'}
+          {mailbox.fromEmail ? 'Update sender' : 'Save sender'}
         </button>
         {mailbox.connected && (
           <button onClick={disconnect} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">
-            Disconnect
+            Clear
           </button>
         )}
       </div>
-      <p className="mt-3 text-xs text-slate-400">
-        With no live email provider configured, sends are simulated for the queue and metrics.
-      </p>
     </div>
   );
 }

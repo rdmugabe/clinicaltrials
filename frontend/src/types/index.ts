@@ -609,6 +609,9 @@ export interface Mailbox {
   fromEmail?: string;
   fromName?: string;
   provider?: string;
+  /** Whether a real backend email provider (SMTP/SendGrid) is configured. */
+  serverConfigured?: boolean;
+  serverProvider?: 'smtp' | 'sendgrid' | 'none';
 }
 
 export interface SequenceMetrics {

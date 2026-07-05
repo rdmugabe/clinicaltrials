@@ -266,8 +266,9 @@ export const sequenceService = {
     const serverProvider = emailService.provider();
     return {
       connected: !!r.connected,
-      fromEmail: (r.from_email as string) || undefined,
-      fromName: (r.from_name as string) || undefined,
+      // Fall back to the env sender identity that the provider actually uses.
+      fromEmail: (r.from_email as string) || process.env.FROM_EMAIL || undefined,
+      fromName: (r.from_name as string) || process.env.FROM_NAME || undefined,
       provider: (r.provider as string) || undefined,
       serverConfigured: serverProvider !== 'none',
       serverProvider,
