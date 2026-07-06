@@ -16,10 +16,12 @@ export interface EnrichmentResult {
   confidence: 'verified' | 'guessed';
 }
 
-const HUNTER_KEY = process.env.HUNTER_API_KEY;
+// Read at call time — dotenv.config() runs after this module is first imported,
+// so a module-load-time read would always miss the key.
+const hunterKey = (): string | undefined => process.env.HUNTER_API_KEY;
 
 export function isEnrichmentConfigured(): boolean {
-  return !!HUNTER_KEY;
+  return !!hunterKey();
 }
 
 function slugifyDomain(company?: string): string | undefined {
@@ -54,7 +56,7 @@ async function hunterFindEmail(name: string, domain: string): Promise<string | u
   url.searchParams.set('domain', domain);
   url.searchParams.set('first_name', firstName);
   url.searchParams.set('last_name', lastName);
-  url.searchParams.set('api_key', HUNTER_KEY as string);
+  url.searchParams.set('api_key', hunterKey() as string);
 
   const res = await fetch(url.toString());
   if (!res.ok) {
@@ -71,7 +73,7 @@ export const enrichmentService = {
     const linkedin = linkedInSearchUrl(name, company);
     const domain = slugifyDomain(company);
 
-    if (HUNTER_KEY && domain) {
+    if (hunterKey() && domain) {
       try {
         const email = await hunterFindEmail(name, domain);
         if (email) {
