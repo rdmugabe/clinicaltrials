@@ -1,0 +1,79 @@
+# Render Blueprint for TrialHub — two Docker services on one project.
+# https://render.com/docs/blueprint-spec
+#
+# First deploy:
+#   1. Push this repo to GitHub, then "New > Blueprint" in Render and pick it.
+#   2. Render builds both Dockerfiles and provisions the backend's disk.
+#   3. Set the secret env vars marked `sync: false` (they are NOT in the repo).
+#   4. After the first deploy, copy each service's URL into the other's
+#      BACKEND_URL / FRONTEND_URL (see comments below), then redeploy.
+#
+# Note: the backend uses SQLite + in-process cron, so it stays at ONE instance.
+
+services:
+  # ---------------------------------------------------------------- backend --
+  - type: web
+    name: trialhub-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: starter            # Starter+ required for a persistent disk
+    region: oregon
+    numInstances: 1          # SQLite (single writer) + cron: never scale beyond 1
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: trialhub-data
+      mountPath: /data       # matches DATA_DIR below -> studyfinder.db lives here
+      sizeGB: 5
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /data
+      # Public URL of the FRONTEND service — set after first deploy (CORS origin).
+      - key: FRONTEND_URL
+        sync: false
+      # --- Secrets: set in the Render dashboard, never committed ---
+      - key: ANTHROPIC_API_KEY   # AI drafting + US-news insights
+        sync: false
+      - key: HUNTER_API_KEY      # verified contact enrichment (optional)
+        sync: false
+      - key: SMTP_HOST           # outbound email
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: FROM_EMAIL          # verified sending identity
+        sync: false
+      - key: FROM_NAME
+        sync: false
+      # Optional fallbacks / integrations — add only if used:
+      # - key: SENDGRID_API_KEY
+      #   sync: false
+      # - key: TWILIO_ACCOUNT_SID
+      #   sync: false
+      # - key: TWILIO_AUTH_TOKEN
+      #   sync: false
+      # - key: TWILIO_PHONE_NUMBER
+      #   sync: false
+
+  # --------------------------------------------------------------- frontend --
+  - type: web
+    name: trialhub-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: .
+    plan: starter
+    region: oregon
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Full URL (with scheme) of the BACKEND service — the frontend proxies
+      # /api here. Set after first deploy, e.g. https://trialhub-backend.onrender.com
+      - key: BACKEND_URL
+        sync: false
