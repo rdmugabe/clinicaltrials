@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
@@ -20,7 +21,7 @@ import notesRouter from './routes/notes.js';
 import accountRouter from './routes/account.js';
 
 // Initialize the SQLite persistence layer (creates tables + seeds account).
-import './db/database.js';
+import { db } from './db/database.js';
 // Import to start the alert monitor scheduler
 import './services/alertMonitorService.js';
 // Import to start the email sequence queue scheduler
@@ -31,7 +32,12 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Behind a platform load balancer / the frontend proxy — trust the first hop so
+// the real client IP is used for rate limiting (and X-Forwarded-* is honored).
+app.set('trust proxy', 1);
+
 // Middleware
+app.use(helmet());
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3002',
   credentials: true,
@@ -71,13 +77,15 @@ app.use('/api/insights', insightsRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/account', accountRouter);
 
-// Health check
+// Health check — also verifies the database is reachable, so a broken DB fails
+// the platform's health probe instead of silently serving errors.
 app.get('/api/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    service: 'clinical-trials-research-api',
-  });
+  try {
+    db.prepare('SELECT 1').get();
+    res.json({ status: 'ok', db: 'ok', timestamp: new Date().toISOString(), service: 'clinical-trials-research-api' });
+  } catch (err) {
+    res.status(503).json({ status: 'degraded', db: 'error', message: err instanceof Error ? err.message : 'db error' });
+  }
 });
 
 // Error handling
@@ -90,10 +98,28 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🏥 Clinical Trials Research API running on port ${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/api/health`);
   console.log(`   Search trials: http://localhost:${PORT}/api/trials/search`);
 });
+
+// Graceful shutdown — stop accepting connections, then close the SQLite handle
+// (flushes the WAL) so container restarts/deploys don't cut work off mid-write.
+function shutdown(signal: string): void {
+  console.log(`\n${signal} received — shutting down…`);
+  server.close(() => {
+    try {
+      db.close();
+    } catch {
+      /* already closed */
+    }
+    process.exit(0);
+  });
+  // Force-exit if connections don't drain in time.
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 export default app;
