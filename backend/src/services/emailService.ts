@@ -1,7 +1,11 @@
 import sgMail from '@sendgrid/mail';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { db } from '../db/database.js';
+import { suppressionService } from './suppressionService.js';
 import type { OutreachRecord, EmailTemplate, OrganizationSettings } from '../types/outreach.js';
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 // ---- Provider configuration ----------------------------------------------
 // Any SMTP provider (Mailtrap, Gmail, Brevo, Resend, SendGrid SMTP, …) can be
@@ -99,7 +103,12 @@ export class EmailService {
       trackOpens?: boolean;
       trackClicks?: boolean;
     }
-  ): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  ): Promise<{ success: boolean; messageId?: string; error?: string; suppressed?: boolean }> {
+    // Never email an address that has opted out.
+    if (suppressionService.isSuppressed(to)) {
+      return { success: false, suppressed: true, error: 'Recipient has unsubscribed' };
+    }
+
     const provider = this.provider();
     if (provider === 'none') {
       return {
@@ -108,6 +117,19 @@ export class EmailService {
       };
     }
 
+    // Append a per-recipient unsubscribe footer + List-Unsubscribe header (CAN-SPAM
+    // + one-click unsubscribe for deliverability).
+    const unsubUrl = suppressionService.unsubscribeUrl(to);
+    const textBody = `${body}\n\n—\nYou received this from ${this.fromName}. Unsubscribe: ${unsubUrl}`;
+    const htmlBody =
+      `${body.replace(/\n/g, '<br>')}` +
+      `<hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0 8px"><p style="font-size:12px;color:#8a94a6;font-family:sans-serif">` +
+      `You received this from ${escapeHtml(this.fromName)}. <a href="${unsubUrl}" style="color:#8a94a6">Unsubscribe</a>.</p>`;
+    const listHeaders = {
+      'List-Unsubscribe': `<${unsubUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    };
+
     // SMTP path (Mailtrap, Gmail, Brevo, etc.).
     if (provider === 'smtp') {
       try {
@@ -115,9 +137,10 @@ export class EmailService {
           from: { address: this.fromEmail, name: this.fromName },
           to,
           subject,
-          text: body,
-          html: body.replace(/\n/g, '<br>'),
+          text: textBody,
+          html: htmlBody,
           replyTo: options?.replyTo,
+          headers: listHeaders,
         });
         return { success: true, messageId: info.messageId };
       } catch (error: any) {
@@ -136,8 +159,9 @@ export class EmailService {
           name: this.fromName,
         },
         subject,
-        html: body.replace(/\n/g, '<br>'),
-        text: body,
+        html: htmlBody,
+        text: textBody,
+        headers: listHeaders,
         trackingSettings: {
           openTracking: {
             enable: options?.trackOpens ?? true,

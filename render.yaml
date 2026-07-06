@@ -31,7 +31,11 @@ services:
         value: production
       - key: DATA_DIR
         value: /data
-      # Public URL of the FRONTEND service — set after first deploy (CORS origin).
+      # Signs unsubscribe links — Render generates a strong random value.
+      - key: UNSUBSCRIBE_SECRET
+        generateValue: true
+      # Public URL of the FRONTEND service — set after first deploy (CORS origin
+      # and the base for unsubscribe links).
       - key: FRONTEND_URL
         sync: false
       # --- Secrets: set in the Render dashboard, never committed ---

@@ -244,12 +244,23 @@ export const sequenceService = {
       const finalBody = emailService.replaceVariables(step.body, vars);
 
       // Attempt a real send only if the mailbox/provider is configured.
+      let suppressed = false;
       if (emailService.isConfigured()) {
         try {
-          await emailService.sendEmail(email, finalSubject, finalBody, {});
+          const r = await emailService.sendEmail(email, finalSubject, finalBody, {});
+          suppressed = !!r.suppressed;
         } catch (err) {
           console.error('Sequence send failed:', err);
         }
+      }
+
+      // If the recipient has unsubscribed, stop their sequence — no send recorded.
+      if (suppressed) {
+        db.prepare(
+          `UPDATE sequence_enrollments SET status = 'stopped', next_send_at = NULL, updated_at = ? WHERE id = ?`
+        ).run(now, enrollmentId);
+        syncContactStatus(e.contact_id as string | null, 'Not Contacted');
+        continue;
       }
 
       db.prepare(

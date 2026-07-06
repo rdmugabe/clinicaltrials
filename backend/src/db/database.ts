@@ -219,6 +219,13 @@ export function initDb(): void {
       synced_at TEXT
     );
 
+    -- Email opt-out list (CAN-SPAM). No suppressed address is ever emailed.
+    CREATE TABLE IF NOT EXISTS email_suppressions (
+      email TEXT PRIMARY KEY,   -- lowercased
+      reason TEXT,
+      created_at TEXT NOT NULL
+    );
+
     -- Progress/status for the sponsor-index sweep (single row).
     CREATE TABLE IF NOT EXISTS sponsor_sync (
       id INTEGER PRIMARY KEY CHECK (id = 1),

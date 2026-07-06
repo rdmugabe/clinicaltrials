@@ -18,6 +18,7 @@ import sequencesRouter from './routes/sequences.js';
 import aiRouter from './routes/ai.js';
 import insightsRouter from './routes/insights.js';
 import notesRouter from './routes/notes.js';
+import unsubscribeRouter from './routes/unsubscribe.js';
 import accountRouter from './routes/account.js';
 
 // Initialize the SQLite persistence layer (creates tables + seeds account).
@@ -75,6 +76,7 @@ app.use('/api/sequences', sequencesRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/insights', insightsRouter);
 app.use('/api/notes', notesRouter);
+app.use('/api/unsubscribe', unsubscribeRouter);
 app.use('/api/account', accountRouter);
 
 // Health check — also verifies the database is reachable, so a broken DB fails
