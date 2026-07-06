@@ -151,10 +151,16 @@ export default function SequenceEditor({
               <textarea
                 value={step.body}
                 onChange={(e) => updateStep(i, { body: e.target.value })}
-                placeholder="Body — use {{name}} to personalize"
+                placeholder="Body — e.g. Hi {{greeting}}, …"
                 rows={4}
                 className={inputCls}
               />
+              {i === 0 && (
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Personalization tokens: <code>{'{{greeting}}'}</code> → “Dr. Smith” · <code>{'{{firstName}}'}</code> → “John” ·{' '}
+                  <code>{'{{name}}'}</code> → full name · <code>{'{{senderName}}'}</code> → your name
+                </p>
+              )}
             </div>
           ))}
         </div>

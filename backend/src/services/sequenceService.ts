@@ -19,6 +19,42 @@ interface SeqRow {
   updated_at: string;
 }
 
+const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+/**
+ * Turn a messy registry name into a natural email salutation:
+ *   "John Smith, PhD"        -> "Dr. Smith"
+ *   "Ivo Iavicoli, Professor"-> "Prof. Iavicoli"
+ *   "Sarah Singh"            -> "Sarah"
+ *   "Additional Site Contact"-> "there"
+ * Falls back to "there" when it doesn't look like a person's name.
+ */
+export function salutationFor(raw: string | null | undefined): string {
+  const name = (raw || '').trim();
+  if (!name) return 'there';
+  const [namePart, ...credParts] = name.split(',');
+  const creds = credParts.join(' ').trim();
+  const hay = `${namePart} ${creds}`;
+
+  const isProf = /\bprof(essor)?\b/i.test(hay);
+  const isDoctor = /\b(MD|DO|Ph\.?D|DVM|DDS|DMD|PharmD|MBBS|MBChB|DrPH|ScD|EdD|DNP|MBBCh)\b/i.test(hay);
+  const title = isProf ? 'Prof.' : isDoctor ? 'Dr.' : null;
+
+  // Drop single-letter middle initials (e.g. the "A" in "David A Berntsen").
+  const tokens = namePart.trim().split(/\s+/).filter((t) => t && !/^[A-Z]\.?$/.test(t));
+
+  if (title && tokens.length >= 1) return `${title} ${capitalize(tokens[tokens.length - 1])}`;
+
+  // Role/org "contacts" (not people) — greet generically.
+  const nonName =
+    /\b(director|manager|coordinator|contact|information|office|team|department|dept|study|trials?|recruit\w*|enroll\w*|sponsor|inc|llc|ltd|gmbh|pharmaceuticals?|biosciences?|therapeutics?|university|hospital|institute|clinic|centers?|centres?)\b/i;
+  if (nonName.test(namePart)) return 'there';
+
+  // Otherwise treat as a person when it looks like a simple given/last name.
+  if (creds || tokens.length <= 2) return tokens.length ? capitalize(tokens[0]) : 'there';
+  return 'there';
+}
+
 /** Sender name for {{senderName}} — the connected mailbox, else env, else a default. */
 function mailboxFromName(): string {
   const r = db.prepare('SELECT from_name FROM mailbox WHERE id = 1').get() as { from_name?: string } | undefined;
@@ -225,6 +261,7 @@ export const sequenceService = {
         name: contactName,
         firstName: contactName.split(' ')[0],
         first_name: contactName.split(' ')[0],
+        greeting: salutationFor(contactName),
         email,
         senderName: mailboxFromName(),
       };
