@@ -72,6 +72,11 @@ export class ClinicalTrialsService {
       url.searchParams.set('pageToken', params.pageToken);
     }
 
+    // Restrict returned fields for lightweight sweeps (company aggregation).
+    if (params.fields && params.fields.length > 0) {
+      url.searchParams.set('fields', params.fields.join(','));
+    }
+
     // Always request JSON format
     url.searchParams.set('format', 'json');
     // v2 only returns totalCount when explicitly asked.

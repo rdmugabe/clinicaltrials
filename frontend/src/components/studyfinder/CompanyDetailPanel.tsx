@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getCompanyDetail, getDiscoveredContacts } from '@/lib/api';
 import StudyDetailPanel from './StudyDetailPanel';
-import type { CompanyDetail, DiscoveredContact } from '@/types';
+import type { CompanyDetail, DiscoveredContact, StudyCard } from '@/types';
 
 const TABS = ['Overview', 'Contacts', 'Studies', 'News / Press'] as const;
 type Tab = (typeof TABS)[number];
@@ -24,15 +24,34 @@ export default function CompanyDetailPanel({ name, onClose }: { name: string; on
   const [tab, setTab] = useState<Tab>('Overview');
   const [contacts, setContacts] = useState<DiscoveredContact[]>([]);
   const [selectedStudy, setSelectedStudy] = useState<string | null>(null);
+  const [studies, setStudies] = useState<StudyCard[]>([]);
+  const [nextToken, setNextToken] = useState<string | undefined>();
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     getCompanyDetail(name)
-      .then(setCompany)
+      .then((c) => {
+        setCompany(c);
+        setStudies(c.studies);
+        setNextToken(c.nextPageToken);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load company'))
       .finally(() => setLoading(false));
     getDiscoveredContacts().then((d) => setContacts(d.contacts)).catch(() => {});
   }, [name]);
+
+  const loadMoreStudies = async () => {
+    if (!nextToken) return;
+    setLoadingMore(true);
+    try {
+      const c = await getCompanyDetail(name, nextToken);
+      setStudies((prev) => [...prev, ...c.studies]);
+      setNextToken(c.nextPageToken);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const companyContacts = useMemo(
     () => contacts.filter((c) => (c.company || '').toLowerCase() === name.toLowerCase()),
@@ -158,7 +177,10 @@ export default function CompanyDetailPanel({ name, onClose }: { name: string; on
             </div>
           ) : tab === 'Studies' ? (
             <div className="space-y-2">
-              {company.studies.map((s) => (
+              <div className="mb-1 text-xs text-slate-400">
+                Showing {studies.length} of {company.studyCount.toLocaleString()} studies
+              </div>
+              {studies.map((s) => (
                 <button
                   key={s.nctId}
                   onClick={() => setSelectedStudy(s.nctId)}
@@ -172,6 +194,17 @@ export default function CompanyDetailPanel({ name, onClose }: { name: string; on
                   <div className="line-clamp-2 text-sm font-medium text-slate-800">{s.title}</div>
                 </button>
               ))}
+              {nextToken && (
+                <div className="pt-2 text-center">
+                  <button
+                    onClick={loadMoreStudies}
+                    disabled={loadingMore}
+                    className="rounded-lg border border-slate-300 px-5 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {loadingMore ? 'Loading…' : 'Load more'}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             /* News / Press */

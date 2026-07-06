@@ -554,8 +554,15 @@ export interface CompanySummary {
   indications: string[];
 }
 
+export interface CompanyDirectoryResult {
+  companies: CompanySummary[];
+  studiesScanned: number;
+  totalMatched: number;
+  truncated: boolean;
+}
 export interface CompanyDetail extends CompanySummary {
   studies: StudyCard[];
+  nextPageToken?: string;
   countries: string[];
   firmographics: {
     description: string | null;

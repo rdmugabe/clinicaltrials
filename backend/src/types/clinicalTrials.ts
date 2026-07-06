@@ -33,6 +33,8 @@ export interface SearchParams {
   term?: string;
   /** Raw Essie expression passed through as filter.advanced (e.g. geo filters). */
   advanced?: string;
+  /** Restrict the returned fields (v2 `fields=`) for lightweight sweeps. */
+  fields?: string[];
   status?: StudyStatus[];
   phase?: StudyPhase[];
   sort?: SortOption;

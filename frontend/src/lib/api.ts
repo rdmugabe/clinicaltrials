@@ -39,6 +39,7 @@ import type {
   ReportSummary,
   ReportFilterOptions,
   CompanySummary,
+  CompanyDirectoryResult,
   CompanyDetail,
   Sequence,
   SequenceStep,
@@ -641,16 +642,20 @@ export async function getReportFilters(): Promise<ReportFilterOptions> {
 export async function searchCompanies(opts?: {
   query?: string;
   indication?: string;
-}): Promise<{ companies: CompanySummary[] }> {
+  scoutId?: string;
+}): Promise<CompanyDirectoryResult> {
   const p = new URLSearchParams();
   if (opts?.query) p.set('query', opts.query);
   if (opts?.indication) p.set('indication', opts.indication);
+  if (opts?.scoutId) p.set('scoutId', opts.scoutId);
   const q = p.toString();
   return fetchApi(`/companies${q ? `?${q}` : ''}`);
 }
 
-export async function getCompanyDetail(name: string): Promise<CompanyDetail> {
-  return fetchApi(`/companies/detail?name=${encodeURIComponent(name)}`);
+export async function getCompanyDetail(name: string, pageToken?: string): Promise<CompanyDetail> {
+  const p = new URLSearchParams({ name });
+  if (pageToken) p.set('pageToken', pageToken);
+  return fetchApi(`/companies/detail?${p.toString()}`);
 }
 
 // ============ EMAIL SEQUENCES ============

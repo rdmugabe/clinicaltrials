@@ -3,14 +3,15 @@ import { companyDirectoryService } from '../services/companyDirectoryService.js'
 
 const router = Router();
 
-// GET /api/companies?query=&indication=
+// GET /api/companies?query=&indication=&scoutId=
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const companies = await companyDirectoryService.search({
+    const result = await companyDirectoryService.search({
       query: (req.query.query as string) || undefined,
       indication: (req.query.indication as string) || undefined,
+      scoutId: (req.query.scoutId as string) || undefined,
     });
-    res.json({ companies });
+    res.json(result);
   } catch (error) {
     console.error('Company directory error:', error);
     res.status(500).json({ error: 'Failed to load companies' });
@@ -26,7 +27,7 @@ router.get('/detail', async (req: Request, res: Response) => {
     return;
   }
   try {
-    const company = await companyDirectoryService.getCompany(name);
+    const company = await companyDirectoryService.getCompany(name, (req.query.pageToken as string) || undefined);
     res.json(company);
   } catch (error) {
     console.error('Company detail error:', error);
