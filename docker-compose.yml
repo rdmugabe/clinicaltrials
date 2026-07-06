@@ -1,0 +1,55 @@
+# Local production-style run of TrialHub — both Docker images + a persistent
+# SQLite volume, wired together on one network.
+#
+#   docker compose up --build      # build + run
+#   open http://localhost:3002
+#   docker compose down            # stop (data survives in the named volume)
+#
+# The backend loads your API keys from backend/.env (Anthropic, SMTP/Mailtrap,
+# Hunter, …). That file must exist — it's gitignored and not baked into the image.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - ./backend/.env            # your local secrets (gitignored)
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATA_DIR: /data             # SQLite -> the persistent volume below
+      FRONTEND_URL: http://localhost:3002
+    volumes:
+      - trialhub-data:/data       # scouts, notes, sequences, sponsor index — survive restarts
+    ports:
+      - "3001:3001"               # optional: direct API access for debugging
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://localhost:3001/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      BACKEND_URL: http://backend:3001   # reach the backend by its service name
+    ports:
+      - "3002:3002"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  trialhub-data:
