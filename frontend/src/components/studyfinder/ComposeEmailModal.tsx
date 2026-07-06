@@ -19,7 +19,7 @@ export default function ComposeEmailModal({
   onSent: () => void;
 }) {
   const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState('Hi {{greeting}},\n\n\n\nBest,\n{{senderName}}');
   const [drafting, setDrafting] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +96,10 @@ export default function ComposeEmailModal({
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500">Message</label>
             <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={10} className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Tokens fill in when sent: <code>{'{{greeting}}'}</code> → “Dr. Smith” · <code>{'{{firstName}}'}</code> → “John” ·{' '}
+              <code>{'{{name}}'}</code> → full name · <code>{'{{senderName}}'}</code> → your name
+            </p>
           </div>
           {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
         </div>

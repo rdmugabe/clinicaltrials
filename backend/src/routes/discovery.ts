@@ -3,6 +3,7 @@ import { discoveryService } from '../services/discoveryService.js';
 import { enrichmentService } from '../services/enrichmentService.js';
 import { accountService } from '../services/accountService.js';
 import { emailService } from '../services/emailService.js';
+import { contactVars } from '../services/personalize.js';
 
 const router = Router();
 
@@ -87,7 +88,11 @@ router.post('/contacts/:id/email', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'Contact has no email — enrich them first' });
     return;
   }
-  const result = await emailService.sendEmail(contact.email, subject, body);
+  // Personalize any merge tokens ({{greeting}}, {{name}}, {{senderName}}, …).
+  const vars = contactVars(contact.name, contact.email);
+  const finalSubject = emailService.replaceVariables(subject, vars);
+  const finalBody = emailService.replaceVariables(body, vars);
+  const result = await emailService.sendEmail(contact.email, finalSubject, finalBody);
   if (result.success) discoveryService.setStatus([contact.id], 'Contacted');
   res.status(result.success ? 200 : 502).json(result);
 });
