@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { salutationFor, mailboxFromName } from './personalize.js';
 import type { SequenceStep } from '../types/studyfinder.js';
 
 // Per the current Anthropic API guidance, default to the latest Opus model.
@@ -184,6 +185,11 @@ Rules:
     indication?: string;
     goal?: string;
   }): Promise<{ subject: string; body: string }> {
+    // Derive the natural salutation ("Dr. Smith") and sender name, shared with
+    // the sequence and one-off send paths.
+    const greeting = salutationFor(context.contactName);
+    const sender = mailboxFromName();
+
     const prompt = `Write a single, personalized outbound email from a clinical research site to a sponsor/CRO contact.
 
 Contact: ${context.contactName || 'the recipient'}${context.jobTitle ? `, ${context.jobTitle}` : ''}${
@@ -193,7 +199,10 @@ ${context.studyTitle ? `Regarding study: ${context.studyTitle}` : ''}
 ${context.indication ? `Indication: ${context.indication}` : ''}
 Goal of the email: ${context.goal || 'introduce our site and request a brief feasibility conversation'}
 
-Rules: under ~120 words, professional and warm, plain text (no markdown), a short specific subject line. Use {{name}} only if the contact name is unknown.`;
+Rules:
+- Under ~120 words, professional and warm, plain text (no markdown), a short specific subject line.
+- Open the greeting with exactly "Hi ${greeting}," — do NOT use the contact's full name or credentials in the salutation.
+- Sign off as "${sender}" (do not invent a different sender name, title, or company).`;
 
     const message = await getClient().messages.create({
       model: MODEL,
