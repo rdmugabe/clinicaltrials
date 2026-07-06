@@ -41,6 +41,8 @@ import type {
   CompanySummary,
   CompanyDirectoryResult,
   CompanyDetail,
+  AllSponsorsResult,
+  SponsorSyncStatus,
   Sequence,
   SequenceStep,
   SequenceEnrollment,
@@ -656,6 +658,25 @@ export async function getCompanyDetail(name: string, pageToken?: string): Promis
   const p = new URLSearchParams({ name });
   if (pageToken) p.set('pageToken', pageToken);
   return fetchApi(`/companies/detail?${p.toString()}`);
+}
+
+export async function getAllSponsors(opts?: {
+  query?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<AllSponsorsResult> {
+  const p = new URLSearchParams();
+  if (opts?.query) p.set('query', opts.query);
+  if (opts?.page) p.set('page', String(opts.page));
+  if (opts?.pageSize) p.set('pageSize', String(opts.pageSize));
+  const q = p.toString();
+  return fetchApi(`/companies/all${q ? `?${q}` : ''}`);
+}
+export async function startSponsorSync(): Promise<SponsorSyncStatus> {
+  return fetchApi('/companies/sync', { method: 'POST' });
+}
+export async function getSponsorSyncStatus(): Promise<SponsorSyncStatus> {
+  return fetchApi('/companies/sync/status');
 }
 
 // ============ EMAIL SEQUENCES ============

@@ -210,15 +210,38 @@ export function initDb(): void {
       created_at TEXT NOT NULL
     );
 
+    -- Cached full sponsor index built by sweeping the whole registry.
+    CREATE TABLE IF NOT EXISTS sponsors (
+      name_key TEXT PRIMARY KEY,   -- lowercased name
+      name TEXT NOT NULL,
+      class TEXT,
+      study_count INTEGER NOT NULL DEFAULT 0,
+      synced_at TEXT
+    );
+
+    -- Progress/status for the sponsor-index sweep (single row).
+    CREATE TABLE IF NOT EXISTS sponsor_sync (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      status TEXT NOT NULL DEFAULT 'idle',  -- idle | running | done | error
+      scanned INTEGER NOT NULL DEFAULT 0,
+      total INTEGER NOT NULL DEFAULT 0,
+      unique_count INTEGER NOT NULL DEFAULT 0,
+      started_at TEXT,
+      finished_at TEXT,
+      error TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_feed_items_date ON feed_items(date_added);
     CREATE INDEX IF NOT EXISTS idx_contacts_nct ON discovered_contacts(nct_id);
     CREATE INDEX IF NOT EXISTS idx_reports_scout ON weekly_reports(scout_id);
     CREATE INDEX IF NOT EXISTS idx_notes_entity ON notes(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_sponsors_count ON sponsors(study_count DESC);
   `);
 
-  // Seed the account + mailbox rows once.
+  // Seed the account + mailbox + sponsor-sync rows once.
   db.prepare(`INSERT INTO account (id) VALUES (1) ON CONFLICT(id) DO NOTHING`).run();
   db.prepare(`INSERT INTO mailbox (id) VALUES (1) ON CONFLICT(id) DO NOTHING`).run();
+  db.prepare(`INSERT INTO sponsor_sync (id) VALUES (1) ON CONFLICT(id) DO NOTHING`).run();
 
   // Migration: add assignee/source to opportunities if the table predates them.
   const oppCols = (db.prepare(`PRAGMA table_info(pipeline_opportunities)`).all() as { name: string }[]).map(

@@ -560,6 +560,27 @@ export interface CompanyDirectoryResult {
   totalMatched: number;
   truncated: boolean;
 }
+export interface SponsorRow {
+  name: string;
+  class?: string;
+  type: string;
+  studyCount: number;
+}
+export interface SponsorSyncStatus {
+  status: 'idle' | 'running' | 'done' | 'error';
+  scanned: number;
+  total: number;
+  uniqueCount: number;
+  sweepUnique: number;
+  startedAt?: string;
+  finishedAt?: string;
+  error?: string;
+}
+export interface AllSponsorsResult {
+  sponsors: SponsorRow[];
+  total: number;
+  sync: SponsorSyncStatus;
+}
 export interface CompanyDetail extends CompanySummary {
   studies: StudyCard[];
   nextPageToken?: string;

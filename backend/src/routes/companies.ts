@@ -1,7 +1,28 @@
 import { Router, Request, Response } from 'express';
 import { companyDirectoryService } from '../services/companyDirectoryService.js';
+import { sponsorIndexService } from '../services/sponsorIndexService.js';
 
 const router = Router();
+
+// GET /api/companies/all?query=&page=&pageSize= — full cached sponsor index.
+router.get('/all', (req: Request, res: Response) => {
+  const result = sponsorIndexService.list({
+    query: (req.query.query as string) || undefined,
+    page: req.query.page ? Number(req.query.page) : undefined,
+    pageSize: req.query.pageSize ? Number(req.query.pageSize) : undefined,
+  });
+  res.json({ ...result, sync: sponsorIndexService.status() });
+});
+
+// POST /api/companies/sync — (re)build the full sponsor index in the background.
+router.post('/sync', (_req: Request, res: Response) => {
+  res.json(sponsorIndexService.startSync());
+});
+
+// GET /api/companies/sync/status — sweep progress.
+router.get('/sync/status', (_req: Request, res: Response) => {
+  res.json(sponsorIndexService.status());
+});
 
 // GET /api/companies?query=&indication=&scoutId=
 router.get('/', async (req: Request, res: Response) => {
