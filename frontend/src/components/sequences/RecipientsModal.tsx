@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getEnrollments, stopEnrollment } from '@/lib/api';
+import { getEnrollments, stopEnrollment, markEnrollmentReplied } from '@/lib/api';
 import type { Sequence, SequenceEnrollment } from '@/types';
 
 function formatWhen(iso?: string): string {
@@ -15,13 +15,14 @@ const STATUS_STYLES: Record<string, string> = {
   active: 'bg-emerald-100 text-emerald-700',
   completed: 'bg-blue-100 text-blue-700',
   stopped: 'bg-slate-200 text-slate-600',
+  replied: 'bg-violet-100 text-violet-700',
 };
 
 /** Per-recipient tracking for a sequence: step progress, status, next send, stop. */
 export default function RecipientsModal({ sequence, onClose }: { sequence: Sequence; onClose: () => void }) {
   const [rows, setRows] = useState<SequenceEnrollment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stopping, setStopping] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const totalSteps = sequence.steps.length;
 
   const load = () => {
@@ -32,20 +33,22 @@ export default function RecipientsModal({ sequence, onClose }: { sequence: Seque
   };
   useEffect(load, [sequence.id]);
 
-  const stop = async (id: string) => {
-    setStopping(id);
+  const act = async (id: string, fn: (id: string) => Promise<unknown>, status: SequenceEnrollment['status']) => {
+    setBusy(id);
     try {
-      await stopEnrollment(id);
-      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'stopped', nextSendAt: undefined } : r)));
+      await fn(id);
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status, nextSendAt: undefined } : r)));
     } finally {
-      setStopping(null);
+      setBusy(null);
     }
   };
 
   const progress = (e: SequenceEnrollment): string => {
+    const at = Math.min(e.currentStep + 1, totalSteps);
     if (e.status === 'completed') return 'Completed';
-    if (e.status === 'stopped') return `Stopped at step ${Math.min(e.currentStep + 1, totalSteps)}`;
-    return `Step ${Math.min(e.currentStep + 1, totalSteps)} of ${totalSteps}`;
+    if (e.status === 'stopped') return `Stopped at step ${at}`;
+    if (e.status === 'replied') return `Replied at step ${at}`;
+    return `Step ${at} of ${totalSteps}`;
   };
 
   return (
@@ -100,13 +103,22 @@ export default function RecipientsModal({ sequence, onClose }: { sequence: Seque
                     <td className="py-2 pr-3 text-xs text-slate-500">{e.status === 'active' ? formatWhen(e.nextSendAt) : '—'}</td>
                     <td className="py-2 text-right">
                       {e.status === 'active' ? (
-                        <button
-                          onClick={() => stop(e.id)}
-                          disabled={stopping === e.id}
-                          className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                        >
-                          {stopping === e.id ? 'Stopping…' : 'Stop'}
-                        </button>
+                        <div className="flex justify-end gap-1">
+                          <button
+                            onClick={() => act(e.id, markEnrollmentReplied, 'replied')}
+                            disabled={busy === e.id}
+                            className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+                          >
+                            Mark replied
+                          </button>
+                          <button
+                            onClick={() => act(e.id, stopEnrollment, 'stopped')}
+                            disabled={busy === e.id}
+                            className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                          >
+                            Stop
+                          </button>
+                        </div>
                       ) : null}
                     </td>
                   </tr>

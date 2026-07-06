@@ -690,6 +690,10 @@ export async function stopEnrollment(enrollmentId: string): Promise<{ ok: boolea
   return fetchApi(`/sequences/enrollments/${enrollmentId}/stop`, { method: 'POST' });
 }
 
+export async function markEnrollmentReplied(enrollmentId: string): Promise<{ ok: boolean }> {
+  return fetchApi(`/sequences/enrollments/${enrollmentId}/replied`, { method: 'POST' });
+}
+
 export async function enrollContacts(
   id: string,
   contacts: { contactId?: string; name?: string; email: string }[]

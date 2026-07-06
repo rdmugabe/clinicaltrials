@@ -127,7 +127,7 @@ export interface SequenceEnrollment {
   contactName?: string;
   contactEmail: string;
   currentStep: number;
-  status: 'active' | 'completed' | 'stopped';
+  status: 'active' | 'completed' | 'stopped' | 'replied';
   enrolledAt: string;
   nextSendAt?: string;
 }

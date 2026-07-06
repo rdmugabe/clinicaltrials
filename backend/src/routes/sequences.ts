@@ -32,6 +32,12 @@ router.post('/enrollments/:enrollmentId/stop', (req: Request, res: Response) => 
   res.status(ok ? 200 : 404).json({ ok });
 });
 
+// POST /api/sequences/enrollments/:enrollmentId/replied — mark a recipient replied.
+router.post('/enrollments/:enrollmentId/replied', (req: Request, res: Response) => {
+  const ok = sequenceService.markReplied(req.params.enrollmentId);
+  res.status(ok ? 200 : 404).json({ ok });
+});
+
 router.post('/', (req: Request, res: Response) => {
   if (!req.body?.name?.trim()) {
     res.status(400).json({ error: 'name is required' });

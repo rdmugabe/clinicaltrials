@@ -182,6 +182,30 @@ export const sequenceService = {
   },
 
   /**
+   * Mark a recipient as having replied: stop remaining sends, record the reply
+   * (so the Replied metric reflects it), and flag the contact as "Replied".
+   */
+  markReplied(enrollmentId: string): boolean {
+    const row = db.prepare('SELECT contact_id FROM sequence_enrollments WHERE id = ?').get(enrollmentId) as
+      | { contact_id: string | null }
+      | undefined;
+    if (!row) return false;
+    const now = new Date().toISOString();
+    db.prepare(
+      `UPDATE sequence_enrollments SET status = 'replied', next_send_at = NULL, updated_at = ? WHERE id = ?`
+    ).run(now, enrollmentId);
+    // Mark their most recent send as replied for the metrics.
+    db.prepare(
+      `UPDATE sequence_sends SET status = 'replied'
+       WHERE id = (SELECT id FROM sequence_sends WHERE enrollment_id = ? ORDER BY created_at DESC LIMIT 1)`
+    ).run(enrollmentId);
+    if (row.contact_id) {
+      db.prepare('UPDATE discovered_contacts SET status = ? WHERE id = ?').run('Replied', row.contact_id);
+    }
+    return true;
+  },
+
+  /**
    * Process all due sends across active sequences. Sends via SendGrid when
    * configured; otherwise logs a simulated send so the queue still advances.
    */
