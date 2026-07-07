@@ -63,11 +63,63 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   });
 
   if (!response.ok) {
+    // Session expired / not signed in: bounce to the login page. Auth endpoints
+    // opt out (they return 401 as normal control flow, e.g. GET /auth/me).
+    if (
+      response.status === 401 &&
+      typeof window !== 'undefined' &&
+      !endpoint.startsWith('/auth') &&
+      window.location.pathname !== '/login'
+    ) {
+      window.location.href = '/login';
+    }
     const error = await response.json().catch(() => ({ message: 'Unknown error' }));
     throw new Error(error.message || `API error: ${response.status}`);
   }
 
   return response.json();
+}
+
+// ---- Auth -----------------------------------------------------------------
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: string;
+}
+
+export async function getAuthConfig(): Promise<{ signupCodeRequired: boolean; hasUsers: boolean }> {
+  return fetchApi('/auth/config');
+}
+
+export async function getMe(): Promise<AuthUser> {
+  const r = await fetchApi<{ user: AuthUser }>('/auth/me');
+  return r.user;
+}
+
+export async function login(email: string, password: string): Promise<AuthUser> {
+  const r = await fetchApi<{ user: AuthUser }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  });
+  return r.user;
+}
+
+export async function register(input: {
+  email: string;
+  password: string;
+  name?: string;
+  code?: string;
+}): Promise<AuthUser> {
+  const r = await fetchApi<{ user: AuthUser }>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return r.user;
+}
+
+export async function logout(): Promise<void> {
+  await fetchApi('/auth/logout', { method: 'POST' });
 }
 
 export async function searchTrials(params: SearchParams): Promise<SearchResponse> {

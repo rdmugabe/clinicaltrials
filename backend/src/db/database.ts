@@ -226,6 +226,23 @@ export function initDb(): void {
       created_at TEXT NOT NULL
     );
 
+    -- Application user accounts (email + password login).
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,     -- lowercased
+      password_hash TEXT NOT NULL,
+      name TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    -- Server-side login sessions (revocable). The token lives in an httpOnly cookie.
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+
     -- Progress/status for the sponsor-index sweep (single row).
     CREATE TABLE IF NOT EXISTS sponsor_sync (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -243,6 +260,7 @@ export function initDb(): void {
     CREATE INDEX IF NOT EXISTS idx_reports_scout ON weekly_reports(scout_id);
     CREATE INDEX IF NOT EXISTS idx_notes_entity ON notes(entity_type, entity_id);
     CREATE INDEX IF NOT EXISTS idx_sponsors_count ON sponsors(study_count DESC);
+    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   `);
 
   // Seed the account + mailbox + sponsor-sync rows once.

@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 
@@ -20,6 +21,8 @@ import insightsRouter from './routes/insights.js';
 import notesRouter from './routes/notes.js';
 import unsubscribeRouter from './routes/unsubscribe.js';
 import accountRouter from './routes/account.js';
+import authRouter from './routes/auth.js';
+import { requireAuth } from './middleware/requireAuth.js';
 
 // Initialize the SQLite persistence layer (creates tables + seeds account).
 import { db } from './db/database.js';
@@ -45,6 +48,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(cookieParser());
 
 // Rate limiting to respect ClinicalTrials.gov API limits (~50 req/min)
 const apiLimiter = rateLimit({
@@ -59,6 +63,26 @@ const apiLimiter = rateLimit({
 });
 
 app.use('/api', apiLimiter);
+
+// --- Public routes (no auth) ---------------------------------------------
+// Health, auth, and the email unsubscribe endpoint must be reachable without a
+// session. Everything mounted after the requireAuth gate below is protected.
+//
+// Health check — also verifies the database is reachable, so a broken DB fails
+// the platform's health probe instead of silently serving errors.
+app.get('/api/health', (_req, res) => {
+  try {
+    db.prepare('SELECT 1').get();
+    res.json({ status: 'ok', db: 'ok', timestamp: new Date().toISOString(), service: 'clinical-trials-research-api' });
+  } catch (err) {
+    res.status(503).json({ status: 'degraded', db: 'error', message: err instanceof Error ? err.message : 'db error' });
+  }
+});
+app.use('/api/auth', authRouter);
+app.use('/api/unsubscribe', unsubscribeRouter);
+
+// --- Auth gate -----------------------------------------------------------
+app.use('/api', requireAuth);
 
 // Routes
 app.use('/api/trials', trialsRouter);
@@ -76,19 +100,7 @@ app.use('/api/sequences', sequencesRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/insights', insightsRouter);
 app.use('/api/notes', notesRouter);
-app.use('/api/unsubscribe', unsubscribeRouter);
 app.use('/api/account', accountRouter);
-
-// Health check — also verifies the database is reachable, so a broken DB fails
-// the platform's health probe instead of silently serving errors.
-app.get('/api/health', (_req, res) => {
-  try {
-    db.prepare('SELECT 1').get();
-    res.json({ status: 'ok', db: 'ok', timestamp: new Date().toISOString(), service: 'clinical-trials-research-api' });
-  } catch (err) {
-    res.status(503).json({ status: 'degraded', db: 'error', message: err instanceof Error ? err.message : 'db error' });
-  }
-});
 
 // Error handling
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

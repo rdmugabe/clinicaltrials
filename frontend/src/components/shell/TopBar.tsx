@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { setAccountTier } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { setAccountTier, logout, type AuthUser } from '@/lib/api';
 import type { Account, AccountTier } from '@/types';
 
 interface TopBarProps {
   account: Account | null;
+  user: AuthUser | null;
   onOpenChangelog: () => void;
   onOpenGuide: () => void;
   onTierChange: () => void;
@@ -17,8 +19,18 @@ const TIERS: { value: AccountTier; label: string }[] = [
   { value: 'enterprise', label: 'Enterprise' },
 ];
 
-export default function TopBar({ account, onOpenChangelog, onOpenGuide, onTierChange }: TopBarProps) {
+export default function TopBar({ account, user, onOpenChangelog, onOpenGuide, onTierChange }: TopBarProps) {
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      /* ignore — clear client state regardless */
+    }
+    router.replace('/login');
+  };
 
   const used = account?.credits.used ?? 0;
   const total = account?.credits.total ?? 0;
@@ -75,9 +87,11 @@ export default function TopBar({ account, onOpenChangelog, onOpenGuide, onTierCh
             className="flex items-center gap-2 rounded-lg border border-slate-200 py-1 pl-1 pr-2 hover:bg-slate-50"
           >
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-600 text-xs font-bold text-white">
-              {(account?.name || 'U').charAt(0)}
+              {(user?.name || user?.email || 'U').charAt(0).toUpperCase()}
             </div>
-            <span className="hidden text-sm font-medium text-slate-700 md:inline">{account?.plan}</span>
+            <span className="hidden max-w-[140px] truncate text-sm font-medium text-slate-700 md:inline">
+              {user?.name || user?.email || account?.plan}
+            </span>
             <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
@@ -88,8 +102,8 @@ export default function TopBar({ account, onOpenChangelog, onOpenGuide, onTierCh
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
               <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
                 <div className="px-3 py-2">
-                  <div className="text-sm font-semibold text-slate-900">{account?.name}</div>
-                  <div className="text-xs text-slate-500">{account?.plan} plan</div>
+                  <div className="text-sm font-semibold text-slate-900">{user?.name || account?.name}</div>
+                  <div className="truncate text-xs text-slate-500">{user?.email || `${account?.plan} plan`}</div>
                 </div>
                 <div className="my-1 border-t border-slate-100" />
                 <div className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -111,6 +125,16 @@ export default function TopBar({ account, onOpenChangelog, onOpenGuide, onTierCh
                     )}
                   </button>
                 ))}
+                <div className="my-1 border-t border-slate-100" />
+                <button
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Sign out
+                </button>
               </div>
             </>
           )}

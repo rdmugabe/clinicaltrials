@@ -34,6 +34,10 @@ services:
       # Signs unsubscribe links — Render generates a strong random value.
       - key: UNSUBSCRIBE_SECRET
         generateValue: true
+      # Optional: if set, new account signups must supply this code (keeps
+      # strangers from self-registering). Leave unset for open registration.
+      - key: SIGNUP_CODE
+        sync: false
       # Public URL of the FRONTEND service — set after first deploy (CORS origin
       # and the base for unsubscribe links).
       - key: FRONTEND_URL
