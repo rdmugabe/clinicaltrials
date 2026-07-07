@@ -1,18 +1,9 @@
 /** @type {import('next').NextConfig} */
-// The frontend calls a relative `/api`, which Next proxies to the backend.
-// In production set BACKEND_URL to the backend's (internal) URL; defaults to
-// localhost:3001 for local dev.
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
-
-const nextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${BACKEND_URL}/api/:path*`,
-      },
-    ];
-  },
-};
+// The frontend calls a relative `/api`. It is proxied to the backend by a
+// runtime route handler at src/app/api/[...path]/route.ts (NOT a next.config
+// rewrite): `rewrites()` is evaluated at `next build` time and baked into the
+// routes manifest, so it would freeze in the wrong BACKEND_URL when that value
+// is only known at deploy time (e.g. on Render, set after the first deploy).
+const nextConfig = {};
 
 module.exports = nextConfig;
