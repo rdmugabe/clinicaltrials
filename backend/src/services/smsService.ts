@@ -6,8 +6,19 @@ const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
 
 let twilioClient: twilio.Twilio | null = null;
 
-if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
-  twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+// Only initialize with a REAL account SID. Twilio SIDs always start with "AC";
+// the .env.example placeholder ("your_twilio_account_sid") does not, and passing
+// it makes the Twilio constructor throw — which, since env vars are set before
+// the process starts in Docker/Render, would crash the whole backend on boot.
+// The try/catch is a belt-and-suspenders guard so SMS config can never take the
+// server down; it just stays disabled.
+if (TWILIO_ACCOUNT_SID?.startsWith('AC') && TWILIO_AUTH_TOKEN) {
+  try {
+    twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+  } catch (err) {
+    console.error('Twilio init failed — SMS disabled:', err instanceof Error ? err.message : err);
+    twilioClient = null;
+  }
 }
 
 export class SmsService {
