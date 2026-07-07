@@ -59,6 +59,19 @@ services:
         sync: false
       - key: FROM_NAME
         sync: false
+      # Optional: continuous SQLite backups to S3-compatible storage (Litestream).
+      # Set all five to enable; leave unset to run without backups. On boot the
+      # container restores from the replica if the disk is empty.
+      # - key: LITESTREAM_BUCKET
+      #   sync: false
+      # - key: LITESTREAM_ACCESS_KEY_ID
+      #   sync: false
+      # - key: LITESTREAM_SECRET_ACCESS_KEY
+      #   sync: false
+      # - key: LITESTREAM_REGION
+      #   sync: false
+      # - key: LITESTREAM_ENDPOINT     # only for non-AWS S3 (R2/B2/MinIO)
+      #   sync: false
       # Optional fallbacks / integrations — add only if used:
       # - key: SENDGRID_API_KEY
       #   sync: false

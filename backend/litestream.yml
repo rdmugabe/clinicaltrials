@@ -1,0 +1,15 @@
+# Litestream replication config. Values are pulled from the environment so no
+# secrets live in the image. Only used when the entrypoint detects LITESTREAM_*.
+#
+# Works with any S3-compatible store (AWS S3, Cloudflare R2, Backblaze B2, MinIO).
+# For non-AWS providers set LITESTREAM_ENDPOINT (e.g. R2's account endpoint).
+dbs:
+  - path: /data/studyfinder.db
+    replicas:
+      - type: s3
+        bucket: ${LITESTREAM_BUCKET}
+        path: ${LITESTREAM_PATH}
+        region: ${LITESTREAM_REGION}
+        endpoint: ${LITESTREAM_ENDPOINT}
+        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}

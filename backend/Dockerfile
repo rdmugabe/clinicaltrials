@@ -7,9 +7,20 @@ FROM node:20-slim AS build
 WORKDIR /app
 
 # better-sqlite3 is a native addon — needs a C++ toolchain to compile.
+# wget + ca-certificates let us fetch the Litestream binary below.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ \
+  && apt-get install -y --no-install-recommends python3 make g++ wget ca-certificates \
   && rm -rf /var/lib/apt/lists/*
+
+# Litestream — continuous SQLite replication to S3-compatible storage. Fetched
+# here (build stage has the tools) and copied into the slim runtime image. Only
+# actually used at runtime when LITESTREAM_* env vars are set (see entrypoint).
+ARG TARGETARCH=amd64
+ARG LITESTREAM_VERSION=0.3.13
+RUN wget -qO /tmp/litestream.tar.gz \
+    "https://github.com/benbjohnson/litestream/releases/download/v${LITESTREAM_VERSION}/litestream-v${LITESTREAM_VERSION}-linux-${TARGETARCH}.tar.gz" \
+  && tar -xzf /tmp/litestream.tar.gz -C /usr/local/bin litestream \
+  && rm /tmp/litestream.tar.gz
 
 # Install against the monorepo lockfile (all workspace manifests must be present).
 COPY package.json package-lock.json ./
@@ -36,9 +47,17 @@ COPY --from=build /app/backend/dist ./backend/dist
 COPY --from=build /app/backend/package.json ./backend/
 COPY --from=build /app/package.json ./
 
+# Litestream binary + config + entrypoint (backups are opt-in via env vars).
+COPY --from=build /usr/local/bin/litestream /usr/local/bin/litestream
+COPY backend/litestream.yml /etc/litestream.yml
+COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # SQLite lives on a mounted volume in production; create the dir for local runs.
 RUN mkdir -p /data
 VOLUME ["/data"]
 
 EXPOSE 3001
-CMD ["node", "backend/dist/index.js"]
+# The entrypoint runs the app under Litestream when LITESTREAM_* is configured,
+# otherwise runs node directly — so local/dev images work with no S3 setup.
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
