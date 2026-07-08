@@ -10,6 +10,7 @@ import {
   updateOpportunityStage,
   deleteOpportunity,
 } from '@/lib/api';
+import AssigneeSelect from '@/components/AssigneeSelect';
 import type { Board, PipelineOpportunity } from '@/types';
 
 const STAGE_ACCENT: Record<string, string> = {
@@ -332,7 +333,7 @@ function AddStudyModal({
             <input value={sponsor} onChange={(e) => setSponsor(e.target.value)} placeholder="Sponsor" className={inputCls} />
             <input value={pi} onChange={(e) => setPi(e.target.value)} placeholder="PI" className={inputCls} />
             <input value={cro} onChange={(e) => setCro(e.target.value)} placeholder="CRO" className={inputCls} />
-            <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="Assignee" className={inputCls} />
+            <AssigneeSelect value={assignee} onChange={setAssignee} className={inputCls} />
           </div>
           <input value={indications} onChange={(e) => setIndications(e.target.value)} placeholder="Indications (comma-separated)" className={inputCls} />
           <select value={stage} onChange={(e) => setStage(e.target.value)} className={inputCls}>

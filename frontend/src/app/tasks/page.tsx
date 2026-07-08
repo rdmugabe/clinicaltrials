@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getTasks, createTask, updateTask, deleteTask } from '@/lib/api';
+import AssigneeSelect from '@/components/AssigneeSelect';
 import type { Task, TaskStatus } from '@/types';
 
 const COLUMNS: { key: TaskStatus; label: string; accent: string }[] = [
@@ -96,12 +97,13 @@ export default function TasksPage() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className={selectCls}>
-          <option value="">All assignees</option>
-          {assignees.map((a) => (
-            <option key={a} value={a}>{a}</option>
-          ))}
-        </select>
+        <AssigneeSelect
+          value={assigneeFilter}
+          onChange={setAssigneeFilter}
+          mode="filter"
+          extraOptions={assignees}
+          className={selectCls}
+        />
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className={selectCls}>
           <option value="">All categories</option>
           {categories.map((c) => (
@@ -174,7 +176,7 @@ export default function TasksPage() {
             <div className="space-y-3">
               <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title *" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               <div className="grid grid-cols-2 gap-3">
-                <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="Assignee" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                <AssigneeSelect value={assignee} onChange={setAssignee} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
                 <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
             </div>
