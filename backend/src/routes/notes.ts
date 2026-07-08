@@ -29,19 +29,20 @@ router.get('/counts', (req: Request, res: Response) => {
   res.json({ counts: notesService.counts(entityType, ids) });
 });
 
-// POST /api/notes — add a note { entityType, entityId, body, author? }.
+// POST /api/notes — add a note { entityType, entityId, body }.
 router.post('/', (req: Request, res: Response) => {
-  const { entityType, entityId, body, author } = req.body as {
+  const { entityType, entityId, body } = req.body as {
     entityType?: string;
     entityId?: string;
     body?: string;
-    author?: string;
   };
   const type = parseType(entityType);
   if (!type || !entityId || !body || !body.trim()) {
     res.status(400).json({ error: 'entityType, entityId, and a non-empty body are required' });
     return;
   }
+  // Attribute the note to the signed-in user (server-authoritative, not client input).
+  const author = req.user?.name || req.user?.email || 'Team member';
   res.status(201).json({ note: notesService.add({ entityType: type, entityId, body, author }) });
 });
 

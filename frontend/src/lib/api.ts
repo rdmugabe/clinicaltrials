@@ -81,10 +81,13 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
 }
 
 // ---- Auth -----------------------------------------------------------------
+export type Role = 'admin' | 'member';
+
 export interface AuthUser {
   id: string;
   email: string;
   name: string | null;
+  role: Role;
   createdAt: string;
 }
 
@@ -110,6 +113,7 @@ export async function register(input: {
   password: string;
   name?: string;
   code?: string;
+  inviteToken?: string;
 }): Promise<AuthUser> {
   const r = await fetchApi<{ user: AuthUser }>('/auth/register', {
     method: 'POST',
@@ -120,6 +124,73 @@ export async function register(input: {
 
 export async function logout(): Promise<void> {
   await fetchApi('/auth/logout', { method: 'POST' });
+}
+
+export async function lookupInvite(token: string): Promise<{ email: string | null; role: Role }> {
+  const r = await fetchApi<{ invite: { email: string | null; role: Role } }>(`/auth/invite/${token}`);
+  return r.invite;
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  await fetchApi('/auth/forgot', { method: 'POST', body: JSON.stringify({ email }) });
+}
+
+export async function lookupReset(token: string): Promise<{ email: string }> {
+  return fetchApi(`/auth/reset/${token}`);
+}
+
+export async function resetPassword(token: string, password: string): Promise<void> {
+  await fetchApi('/auth/reset', { method: 'POST', body: JSON.stringify({ token, password }) });
+}
+
+// ---- Team -----------------------------------------------------------------
+export interface TeamInvite {
+  token: string;
+  email: string | null;
+  role: Role;
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  status: 'pending' | 'accepted' | 'expired';
+  url: string;
+}
+
+export async function getMembers(): Promise<AuthUser[]> {
+  const r = await fetchApi<{ members: AuthUser[] }>('/team/members');
+  return r.members;
+}
+
+export async function removeMember(id: string): Promise<void> {
+  await fetchApi(`/team/members/${id}`, { method: 'DELETE' });
+}
+
+export async function setMemberRole(id: string, role: Role): Promise<AuthUser> {
+  const r = await fetchApi<{ user: AuthUser }>(`/team/members/${id}/role`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  });
+  return r.user;
+}
+
+export async function createMemberResetLink(id: string): Promise<{ url: string; email: string }> {
+  return fetchApi(`/team/members/${id}/reset-link`, { method: 'POST' });
+}
+
+export async function getInvites(): Promise<TeamInvite[]> {
+  const r = await fetchApi<{ invites: TeamInvite[] }>('/team/invites');
+  return r.invites;
+}
+
+export async function createInvite(input: { email?: string; role?: Role }): Promise<TeamInvite> {
+  const r = await fetchApi<{ invite: TeamInvite }>('/team/invites', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return r.invite;
+}
+
+export async function revokeInvite(token: string): Promise<void> {
+  await fetchApi(`/team/invites/${token}`, { method: 'DELETE' });
 }
 
 export async function searchTrials(params: SearchParams): Promise<SearchResponse> {

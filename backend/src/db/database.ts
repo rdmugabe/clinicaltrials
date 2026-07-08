@@ -232,6 +232,7 @@ export function initDb(): void {
       email TEXT UNIQUE NOT NULL,     -- lowercased
       password_hash TEXT NOT NULL,
       name TEXT,
+      role TEXT NOT NULL DEFAULT 'member',  -- 'admin' | 'member'
       created_at TEXT NOT NULL
     );
 
@@ -241,6 +242,28 @@ export function initDb(): void {
       user_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL
+    );
+
+    -- Team invites: an admin mints a token, shares the link; the invitee
+    -- registers through it (no shared signup code needed).
+    CREATE TABLE IF NOT EXISTS invites (
+      token TEXT PRIMARY KEY,
+      email TEXT,                     -- optional: pre-fills / pins the invite
+      role TEXT NOT NULL DEFAULT 'member',
+      created_by TEXT,                -- user id of the inviting admin
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      accepted_at TEXT,
+      accepted_by TEXT                -- user id that consumed it
+    );
+
+    -- Password reset tokens (self-serve or admin-generated link).
+    CREATE TABLE IF NOT EXISTS password_resets (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT
     );
 
     -- Progress/status for the sponsor-index sweep (single row).
@@ -286,6 +309,18 @@ export function initDb(): void {
   }
   if (!scoutCols.includes('match_total')) {
     db.exec(`ALTER TABLE scouts ADD COLUMN match_total INTEGER`);
+  }
+
+  // Migration: add role to users if the table predates team management, and make
+  // sure a team always has at least one admin (promote the earliest account).
+  const userCols = (db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]).map((c) => c.name);
+  if (userCols.length > 0 && !userCols.includes('role')) {
+    db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'member'`);
+  }
+  const hasUsers = !!db.prepare(`SELECT 1 FROM users LIMIT 1`).get();
+  const hasAdmin = !!db.prepare(`SELECT 1 FROM users WHERE role = 'admin' LIMIT 1`).get();
+  if (hasUsers && !hasAdmin) {
+    db.exec(`UPDATE users SET role = 'admin' WHERE id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)`);
   }
 
   // Seed default boards once.

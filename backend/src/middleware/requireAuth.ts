@@ -24,3 +24,12 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   req.user = user;
   next();
 }
+
+/** Gate a route to admins only. Assumes requireAuth ran first. */
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (req.user?.role !== 'admin') {
+    res.status(403).json({ error: 'Forbidden', message: 'Admins only' });
+    return;
+  }
+  next();
+}

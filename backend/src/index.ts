@@ -22,6 +22,7 @@ import notesRouter from './routes/notes.js';
 import unsubscribeRouter from './routes/unsubscribe.js';
 import accountRouter from './routes/account.js';
 import authRouter from './routes/auth.js';
+import teamRouter from './routes/team.js';
 import { requireAuth } from './middleware/requireAuth.js';
 
 // Initialize the SQLite persistence layer (creates tables + seeds account).
@@ -101,6 +102,7 @@ app.use('/api/ai', aiRouter);
 app.use('/api/insights', insightsRouter);
 app.use('/api/notes', notesRouter);
 app.use('/api/account', accountRouter);
+app.use('/api/team', teamRouter);
 
 // Error handling
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

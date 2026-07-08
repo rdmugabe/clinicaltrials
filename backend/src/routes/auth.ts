@@ -14,6 +14,12 @@ function cookieOptions(): CookieOptions {
   };
 }
 
+// Public base URL of the app, used to build reset links that point at the
+// frontend (which proxies /api). Mirrors suppressionService's resolution.
+function appBaseUrl(): string {
+  return (process.env.PUBLIC_URL || process.env.FRONTEND_URL || 'http://localhost:3002').replace(/\/$/, '');
+}
+
 function fail(res: Response, err: unknown): void {
   const status = err instanceof authService.AuthError ? err.status : 500;
   const message = err instanceof Error ? err.message : 'Something went wrong';
@@ -26,12 +32,68 @@ router.get('/config', (_req: Request, res: Response) => {
   res.json({ signupCodeRequired: !!process.env.SIGNUP_CODE, hasUsers: authService.hasUsers() });
 });
 
+// Look up an invite so the register form can pin/prefill the email and role.
+router.get('/invite/:token', (req: Request, res: Response) => {
+  const inv = authService.getValidInvite(req.params.token);
+  if (!inv) {
+    res.status(404).json({ error: 'This invite link is invalid or has expired' });
+    return;
+  }
+  res.json({ invite: { email: inv.email, role: inv.role } });
+});
+
 router.post('/register', (req: Request, res: Response) => {
   try {
-    const { email, password, name, code } = req.body || {};
-    const { user, token } = authService.register({ email, password, name, code });
+    const { email, password, name, code, inviteToken } = req.body || {};
+    const { user, token } = authService.register({ email, password, name, code, inviteToken });
     res.cookie(SESSION_COOKIE, token, cookieOptions());
     res.status(201).json({ user });
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+// Self-serve password reset request. Always 200 (no account enumeration); emails
+// the link when a mail provider is configured.
+router.post('/forgot', async (req: Request, res: Response) => {
+  try {
+    const email = (req.body?.email as string) || '';
+    const made = authService.createResetByEmail(email);
+    if (made) {
+      const url = `${appBaseUrl()}/reset?token=${made.token}`;
+      const { emailService } = await import('../services/emailService.js');
+      if (emailService.isConfigured()) {
+        await emailService
+          .sendEmail(
+            made.user.email,
+            'Reset your TrialHub password',
+            `Someone requested a password reset for your TrialHub account.\n\nReset it here (link expires in 2 hours):\n${url}\n\nIf this wasn't you, you can ignore this email.`
+          )
+          .catch(() => undefined);
+      }
+    }
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: true });
+  }
+});
+
+// Validate a reset token (so the reset page can show whose account it is).
+router.get('/reset/:token', (req: Request, res: Response) => {
+  const user = authService.getResetUser(req.params.token);
+  if (!user) {
+    res.status(404).json({ error: 'This reset link is invalid or has expired' });
+    return;
+  }
+  res.json({ email: user.email });
+});
+
+router.post('/reset', (req: Request, res: Response) => {
+  try {
+    const { token, password } = req.body || {};
+    const user = authService.resetPassword(token, password);
+    // Reset revokes sessions; require a fresh sign-in rather than auto-login.
+    res.json({ ok: true, email: user.email });
   } catch (err) {
     fail(res, err);
   }

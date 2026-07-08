@@ -59,7 +59,7 @@ export default function Sidebar({ onOpenOutreach, onOpenAlerts }: SidebarProps) 
     { label: 'Tasks', href: '/tasks', icon: 'check' },
     { label: 'Contacts & Companies', href: '/crm', icon: 'contacts' },
     { label: 'Reports', href: '/reports', icon: 'chart' },
-    { label: 'Teams', icon: 'team', soon: true, gated: true },
+    { label: 'Team', href: '/team', icon: 'team' },
   ];
 
   const renderItem = (item: NavItem) => {

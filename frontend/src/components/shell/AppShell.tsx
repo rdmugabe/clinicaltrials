@@ -30,8 +30,8 @@ export function useShell(): ShellContextValue {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  // The login page renders itself, outside the authenticated shell chrome.
-  const isAuthRoute = pathname === '/login';
+  // These pages render themselves, outside the authenticated shell chrome.
+  const isAuthRoute = pathname === '/login' || pathname === '/reset';
 
   const [account, setAccount] = useState<Account | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
